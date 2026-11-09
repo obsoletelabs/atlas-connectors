@@ -67,7 +67,7 @@ namespace Atlas.Playnite
             Write("idn-" + Hash(key), JsonNode.Object(new[] { new KeyValuePair<string, JsonNode>("atlas_id", JsonNode.Str(atlasId)) }));
         }
 
-        public bool IsFresh(CachedRecord c, TimeSpan ttl) { return c != null && _now() - c.FetchedUtc <= ttl; }
+        public bool IsFresh(CachedRecord c, TimeSpan ttl) { return c != null && ttl > TimeSpan.Zero && _now() - c.FetchedUtc <= ttl; }
 
         private JsonNode Read(string name)
         {
