@@ -396,6 +396,11 @@ public sealed class AtlasLookup
             return new Uri(baseUri, "api/v2/artwork/" + Uri.EscapeDataString(a.Id) + "/image").AbsoluteUri;
         }
 
-        return Uri.TryCreate(u, UriKind.Absolute, out var abs) ? abs.AbsoluteUri : new Uri(baseUri, u.TrimStart('/')).AbsoluteUri;
+        // On Linux a path such as "/api/v2/media/x" parses as an absolute file:// URI, so only
+        // http(s) URLs count as absolute; everything else is resolved against the Atlas base.
+        return Uri.TryCreate(u, UriKind.Absolute, out var abs)
+               && (abs.Scheme == Uri.UriSchemeHttp || abs.Scheme == Uri.UriSchemeHttps)
+            ? abs.AbsoluteUri
+            : new Uri(baseUri, u.TrimStart('/')).AbsoluteUri;
     }
 }
