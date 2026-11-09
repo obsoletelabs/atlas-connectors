@@ -15,6 +15,7 @@ Output is ``key=value`` lines (also appended to ``$GITHUB_OUTPUT``)::
 
     python=true|false     run the Python lane (tools, contract pin check)
     contract=true|false   verify contract/ pins
+    dotnet=true|false     build and test dotnet/Atlas.Client (the shared client + its tests against contract/fixtures)
     live=true|false       the live Atlas lane is worth running
     packages=a,b          package directories to build and test (empty when none)
 
@@ -73,13 +74,14 @@ def classify(files: list[str] | None, packages: list[str] | None = None) -> dict
     return {
         "python": shared or python,
         "contract": shared,
+        "dotnet": shared,
         "live": bool(chosen) or live_tests,
         "packages": chosen,
     }
 
 
 def everything(every: list[str] | None = None) -> dict[str, object]:
-    return {"python": True, "contract": True, "live": True,
+    return {"python": True, "contract": True, "dotnet": True, "live": True,
             "packages": sorted(every if every is not None else available_packages())}
 
 
