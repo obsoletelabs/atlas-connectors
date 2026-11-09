@@ -15,7 +15,7 @@ the CI plumbing and the test tooling that the connectors will be built on.
 | Package | Host | Media from Atlas | Tag prefix | Status |
 |---|---|---|---|---|
 | `packages/playnite` | Playnite (Windows game launcher), `MetadataPlugin` packaged as `.pext` | games | `playnite-v*` | planned (PR X1) |
-| `packages/jellyfin` | Jellyfin media server plugin (`IRemoteMetadataProvider`, `IExternalId`, image provider) | books, movies, TV, anime (not games: Jellyfin has no game library) | `jellyfin-v*` | planned (PR X2) |
+| `packages/jellyfin` | Jellyfin media server plugin (`IRemoteMetadataProvider`, `IExternalId`, image provider) | books, movies, TV, anime (not games: Jellyfin has no game library) | `jellyfin-v*` | 0.1.0 in review (PR X2): builds and tests for Jellyfin 10.11 and 12; never loaded in a Jellyfin server |
 | `packages/emby` | Emby plugin | movies, TV, books | `emby-v*` | undecided: a one-day spike decides (D15.17) |
 | `packages/plex` | Plex | movies, TV | `plex-v*` | undecided: a one-day spike decides (D15.17) |
 | `dotnet/Atlas.Client` | shared C# client, compiled into each package as source (not a NuGet dependency) | n/a | not released | implemented (PR 2): models, tolerant reader, HTTP retry, wire negotiation, pairing; see `dotnet/README.md` |

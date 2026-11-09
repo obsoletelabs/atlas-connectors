@@ -1,0 +1,15 @@
+{
+  "first_release": {
+    "date": "2015-04",
+    "precision": "month"
+  },
+  "id": "atlas:00000000000000000000000013",
+  "media_type": "anime",
+  "provider_ids": {
+    "anilist": "0000003"
+  },
+  "redirected_from": null,
+  "subjects": [],
+  "title": "Synthetic Anime Month",
+  "version": 1
+}

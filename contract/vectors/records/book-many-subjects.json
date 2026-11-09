@@ -1,0 +1,23 @@
+{
+  "id": "atlas:00000000000000000000000016",
+  "media_type": "book",
+  "provider_ids": {},
+  "redirected_from": null,
+  "subjects": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08",
+    "S09",
+    "S10",
+    "S11",
+    "s01",
+    "S12"
+  ],
+  "title": "Synthetic Many Subjects",
+  "version": 1
+}

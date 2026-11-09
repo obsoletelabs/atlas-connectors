@@ -1,0 +1,20 @@
+{
+  "facts": {
+    "description": "A made-up series used only to test field mapping."
+  },
+  "first_release": {
+    "date": "2012",
+    "precision": "year"
+  },
+  "id": "atlas:00000000000000000000000012",
+  "media_type": "tv_show",
+  "provider_ids": {
+    "tvdb": "0000002"
+  },
+  "redirected_from": null,
+  "subjects": [
+    "Documentary"
+  ],
+  "title": "Synthetic Tides",
+  "version": 1
+}

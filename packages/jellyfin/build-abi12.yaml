@@ -1,0 +1,12 @@
+name: "Atlas"
+guid: "0ca48640-0596-432e-9978-e24ebb438d29"
+version: "0.1.0.1"
+targetAbi: "12.0.0.0"
+framework: "net10.0"
+overview: "Metadata and images for books, movies and series from your own Atlas node."
+description: "Reads metadata, covers and ids from your own Atlas node (read-only). Books, movies and series where Atlas has data. Identity first: ISBN, TMDb, IMDb, TVDB and AniList ids are sent to Atlas before any title."
+category: "Metadata"
+owner: "obsoletelabs"
+artifacts:
+- "Jellyfin.Plugin.Atlas.dll"
+changelog: "First version. See packages/jellyfin/CHANGELOG.md."
