@@ -1,0 +1,26 @@
+{
+  "contract": 1,
+  "email_verification": "optional",
+  "kind": "local",
+  "media_types": [
+    "game",
+    "anime",
+    "movie",
+    "tv_show",
+    "series",
+    "collection"
+  ],
+  "name": "Atlas",
+  "nav_links": [],
+  "node_id": "24f2769d91deb038",
+  "operator": "",
+  "registration": "open",
+  "role": "local",
+  "tagline": "Media metadata, merged and sourced",
+  "theme": {
+    "accent": "#6aa8ff",
+    "accent_light": "#1a5fc2",
+    "default": "auto",
+    "logo": null
+  }
+}

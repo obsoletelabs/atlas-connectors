@@ -1,0 +1,3 @@
+* text=auto eol=lf
+*.png binary
+*.sha256 text eol=lf
