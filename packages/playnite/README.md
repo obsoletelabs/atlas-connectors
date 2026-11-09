@@ -46,8 +46,8 @@ It only reads. It never writes to Atlas.
 Expected values for 9 records are in `contract/vectors/playnite.json` and are run by the unit tests.
 
 **Identity first.** A Steam game is sent to Atlas by its Steam app id (`steamsync` namespace). Other libraries are sent as
-title evidence plus Playnite's own game id. Atlas assigns by itself only for the reasons `id`, `redirect`, `crosswalk` and `exact`
-(`CLIENT-CONTRACT` section 5). A title-based answer is **never applied by a background (bulk) download**; in a manual download
+title evidence plus Playnite's own game id. The connector applies an answer by itself only for the identity reasons `id`, `redirect`
+and `crosswalk` (`CLIENT-CONTRACT` section 5); `exact` is Atlas's exact *title* match and is treated as a candidate. A title-based answer is **never applied by a background (bulk) download**; in a manual download
 (game edit window) you pick from the candidates or search Atlas yourself.
 Only Steam is wired because it is the only library whose Atlas namespace was checked (`resolve-contract-v1.json`); other libraries
 get an id mapping when their namespace is confirmed.

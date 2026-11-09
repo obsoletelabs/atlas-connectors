@@ -149,8 +149,12 @@ namespace Atlas.Playnite
                 }
             }
 
-            // Not safe to assign alone. Offer candidates; the user decides (CLIENT-CONTRACT 5).
-            var ids = a.Candidates.Where(c => !string.IsNullOrEmpty(c.Id)).Select(c => c.Id).Distinct().Take(5).ToList();
+            // Not safe to assign alone. Offer candidates; the user decides (CLIENT-CONTRACT 5). An exact *title* match comes back
+            // as reason "exact" with a canonical id and possibly no candidate list: that id is offered first, never applied.
+            var offered = new List<string>();
+            if (!string.IsNullOrEmpty(a.CanonicalId)) offered.Add(a.CanonicalId);
+            offered.AddRange(a.Candidates.Where(c => !string.IsNullOrEmpty(c.Id)).Select(c => c.Id));
+            var ids = offered.Distinct(StringComparer.Ordinal).Take(5).ToList();
             if (ids.Count == 0) return new LookupResult { Outcome = LookupOutcome.NotFound };
             var records = await _client.GetRecordsAsync(ids, ct).ConfigureAwait(false);
             var list = new List<Candidate>();
