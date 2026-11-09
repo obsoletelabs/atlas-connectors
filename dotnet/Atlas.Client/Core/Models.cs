@@ -202,8 +202,10 @@ namespace Atlas.Client
         public string RedirectedFrom { get; set; }
 
         /// <summary>
-        /// True only for the reasons a client may assign by itself: id, redirect, crosswalk, exact (CLIENT-CONTRACT section 5),
-        /// when a canonical id exists and Atlas does not say <c>assigned: false</c>. Everything else is for the user to choose.
+        /// True only for the identity reasons a client may assign by itself: id, redirect, crosswalk (CLIENT-CONTRACT section 5),
+        /// when a canonical id exists and Atlas does not say <c>assigned: false</c>. Everything else is for the user to choose,
+        /// including <c>exact</c>: Atlas uses it for an exact <b>title</b> match (title evidence, atlas/resolve.py step 2), and a
+        /// title is never an automatic match for a connector (CONTRACT-C15 section 8.4).
         /// An Atlas that sends no <c>reason</c> (older) is judged by <c>method</c> with the same list.
         /// </summary>
         public bool CanAutoAssign
@@ -212,7 +214,7 @@ namespace Atlas.Client
             {
                 if (string.IsNullOrEmpty(CanonicalId) || Assigned == false) return false;
                 var why = Reason ?? Method;
-                return why == "id" || why == "redirect" || why == "crosswalk" || why == "exact";
+                return why == "id" || why == "redirect" || why == "crosswalk";
             }
         }
     }

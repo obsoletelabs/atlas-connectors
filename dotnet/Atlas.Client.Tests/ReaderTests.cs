@@ -160,13 +160,13 @@ public class ReaderTests
     [InlineData("id", true, true)]
     [InlineData("redirect", true, true)]
     [InlineData("crosswalk", true, true)]
-    [InlineData("exact", true, true)]
-    [InlineData("exact", false, false)]      // Atlas says not assignable: believe it
+    [InlineData("exact", true, false)]       // an exact TITLE match: a candidate for the user, never automatic (C15 8.4)
+    [InlineData("crosswalk", false, false)]  // Atlas says not assignable: believe it
     [InlineData("conflict", true, false)]
     [InlineData("fuzzy", true, false)]
     [InlineData("none", false, false)]
     [InlineData("some_future_reason", true, false)]
-    public void Only_id_redirect_crosswalk_exact_auto_assign(string reason, bool assigned, bool expected)
+    public void Only_id_redirect_crosswalk_auto_assign(string reason, bool assigned, bool expected)
     {
         var r = new ResolveResult { CanonicalId = "atlas:x", Reason = reason, Assigned = assigned };
         Assert.Equal(expected, r.CanAutoAssign);
@@ -178,6 +178,7 @@ public class ReaderTests
         Assert.False(new ResolveResult { Reason = "id", Assigned = true }.CanAutoAssign);
         Assert.True(new ResolveResult { CanonicalId = "atlas:x", Method = "crosswalk" }.CanAutoAssign);
         Assert.False(new ResolveResult { CanonicalId = "atlas:x", Method = "fuzzy" }.CanAutoAssign);
+        Assert.False(new ResolveResult { CanonicalId = "atlas:x", Method = "exact" }.CanAutoAssign);
     }
 
     [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
