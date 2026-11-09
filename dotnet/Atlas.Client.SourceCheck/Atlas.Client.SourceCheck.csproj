@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Proves the "compiled in as source" promise: a net462 library (the Playnite SDK's framework) that takes Atlas.Client
+       through Atlas.Client.Source.props with Newtonsoft only (no System.Text.Json), at C# 7.3, warnings as errors.
+       Build-only: nothing here runs. -->
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AtlasJson>Newtonsoft</AtlasJson>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <Import Project="..\Atlas.Client\Atlas.Client.Source.props" />
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+</Project>
