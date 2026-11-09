@@ -149,6 +149,8 @@ public class ImageTests
     [InlineData("//evil.example/media/abc")]
     [InlineData("media/abc")]
     [InlineData("http://atlas.test/media/abc")]    // same host, different scheme: a different origin
+    [InlineData("file:///etc/passwd")]
+    [InlineData("/\\evil.example/media/abc")]
     public async Task Artwork_urls_that_are_not_on_the_node_are_not_fetched(string url)
     {
         using var rig = new Rig();
