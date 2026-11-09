@@ -1,0 +1,32 @@
+{
+  "authors": [
+    {
+      "name": "Ada Example"
+    },
+    {
+      "name": "  "
+    },
+    {
+      "name": "B. Placeholder"
+    }
+  ],
+  "first_release": {
+    "date": "1999-07",
+    "precision": "month"
+  },
+  "id": "atlas:00000000000000000000000014",
+  "media_type": "book",
+  "provider_ids": {
+    "isbn": "9780000000002"
+  },
+  "redirected_from": null,
+  "series": {
+    "name": "The Fictional Coast",
+    "position": "2.5"
+  },
+  "subjects": [
+    "Fiction"
+  ],
+  "title": "Synthetic Interlude",
+  "version": 1
+}

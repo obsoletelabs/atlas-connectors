@@ -24,5 +24,10 @@ are the Playnite SDK `GameMetadata` property names (checked against PlayniteSDK 
 A `record` starting with `vectors/` is a synthetic record kept next to the vectors (`records/`, CC0); any other `record` is a
 file under `../fixtures/`.
 
-Status: `playnite.json` is complete for Playnite connector 0.1.0 (`packages/playnite`, which runs it). The Jellyfin vectors
-arrive with X2.
+Status: `playnite.json` is complete for Playnite connector 0.1.0 (`packages/playnite`, which runs it). `jellyfin.json` is complete for
+Jellyfin plugin 0.1.0 (`packages/jellyfin`, which runs it against the real `Book`, `Movie` and `Series` classes).
+
+`jellyfin.json` cases add `kind` (`book`, `movie` or `series`: which Jellyfin provider maps the record). Field names are the Jellyfin `BaseItem`
+properties: `Name`, `Overview`, `ProductionYear`, `PremiereDate` (`yyyy-MM-dd`, only at day precision), `Genres`, `Tags`, `Studios`,
+`SeriesName` and `IndexNumber` (books), `Authors` (names of the people with kind Author), `ProviderIds` (a subset match: listed keys must be equal).
+Synthetic records for movie, series, anime and book edge cases are in `records/`.

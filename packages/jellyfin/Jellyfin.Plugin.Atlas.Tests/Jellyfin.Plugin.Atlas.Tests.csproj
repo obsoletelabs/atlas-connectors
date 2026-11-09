@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runs the plugin's logic against the real Jellyfin.Controller / Jellyfin.Model assemblies of the selected ABI:
+       dotnet test -p:JellyfinAbi=10.11 (net9.0) and -p:JellyfinAbi=12 (net10.0). No Jellyfin server is started. -->
+  <PropertyGroup>
+    <JellyfinAbi Condition="'$(JellyfinAbi)' == ''">10.11</JellyfinAbi>
+    <TestTfm Condition="'$(JellyfinAbi)' == '10.11'">net9.0</TestTfm>
+    <TestTfm Condition="'$(JellyfinAbi)' == '12'">net10.0</TestTfm>
+    <JellyfinPackages Condition="'$(JellyfinAbi)' == '10.11'">10.11.11</JellyfinPackages>
+    <JellyfinPackages Condition="'$(JellyfinAbi)' == '12'">12.4.0</JellyfinPackages>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>$(TestTfm)</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- the plugin excludes these at runtime (the server provides them); the tests need the real assemblies -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinPackages)" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinPackages)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Jellyfin.Plugin.Atlas\Jellyfin.Plugin.Atlas.csproj" />
+  </ItemGroup>
+</Project>

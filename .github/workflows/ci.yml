@@ -86,7 +86,7 @@ jobs:
           path: test-results/*.trx
           if-no-files-found: ignore
 
-  # One job per package. Jellyfin is still a placeholder (PR X2); Playnite builds, tests and packs for real.
+  # One job per package.
   # Windows only: the Playnite SDK, WPF and DPAPI are Windows/.NET Framework things; the tests run on .NET Framework 4.8.
   package-playnite:
     needs: gate
@@ -121,16 +121,43 @@ jobs:
             packages/playnite/dist/*
           if-no-files-found: ignore
 
+  # Linux is enough: the plugin is plain net9.0 / net10.0 code against the Jellyfin NuGet packages. One build and one test run per
+  # supported ABI (packages/jellyfin/abis.json). No Jellyfin server is started here (see the README "Not verified" section).
   package-jellyfin:
     needs: gate
     if: contains(format(',{0},', needs.gate.outputs.packages), ',jellyfin,')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Build and test (not implemented in the scaffold)
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build and test for Jellyfin 10.11 (net9.0)
+        run: dotnet test packages/jellyfin/Jellyfin.Plugin.Atlas.Tests -c Release -p:JellyfinAbi=10.11 --logger "trx;LogFileName=atlas-jellyfin-10.11.trx" --results-directory test-results
+      - name: Build and test for Jellyfin 12 (net10.0)
+        run: dotnet test packages/jellyfin/Jellyfin.Plugin.Atlas.Tests -c Release -p:JellyfinAbi=12 --logger "trx;LogFileName=atlas-jellyfin-12.trx" --results-directory test-results
+      - name: Pack one zip per ABI and check them
         run: |
-          echo "::notice::packages/jellyfin has no code yet (PR X2). Selected by the path filter; nothing to build."
-          test -f packages/jellyfin/README.md
+          python packages/jellyfin/pack.py --no-build --abi 10.11
+          python packages/jellyfin/pack.py --no-build --abi 12
+          for z in packages/jellyfin/dist/*.zip; do python packages/jellyfin/pack.py --verify "$z"; done
+      - name: Packaging and catalogue tests
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_jellyfin_package.py -q
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: atlas-jellyfin
+          path: |
+            test-results/*.trx
+            packages/jellyfin/dist/*
+          if-no-files-found: ignore
 
   # The live lane: a REAL Atlas, seeded with synthetic data, and the replay of the resolve contract against it.
   # Atlas is private, so the source is fetched with ATLAS_CHECKOUT_TOKEN (read-only contents on the Atlas repository)

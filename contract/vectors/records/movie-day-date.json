@@ -1,0 +1,29 @@
+{
+  "facts": {
+    "description": "A made-up film used only to test field mapping.",
+    "developer": [
+      "Example Pictures"
+    ],
+    "publisher": [
+      "Placeholder Distribution",
+      "example pictures"
+    ]
+  },
+  "first_release": {
+    "date": "2004-06-15",
+    "precision": "day"
+  },
+  "id": "atlas:00000000000000000000000011",
+  "media_type": "movie",
+  "provider_ids": {
+    "imdb": "tt0000001",
+    "tmdb": "0000001"
+  },
+  "redirected_from": null,
+  "subjects": [
+    "Drama",
+    "Adventure"
+  ],
+  "title": "Synthetic Harbour",
+  "version": 1
+}
