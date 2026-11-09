@@ -49,6 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "Atlas for Playnite ${GITHUB_REF_NAME#playnite-v}"             --notes-file packages/playnite/CHANGELOG.md packages/playnite/dist/*.pext packages/playnite/dist/*.sha256
+          gh release create "$GITHUB_REF_NAME" --title "Atlas for Playnite ${GITHUB_REF_NAME#playnite-v}" \
+            --notes-file packages/playnite/CHANGELOG.md packages/playnite/dist/*.pext packages/playnite/dist/*.sha256
       # Not automated on purpose: the Playnite add-on database accepts submissions only after Playnite 11 (docs/VENDOR-FACTS.md),
       # and catalogue generation (tools/gen_catalogues.py) does not exist yet. Do the database PR by hand from the release asset.

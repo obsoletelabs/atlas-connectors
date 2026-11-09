@@ -79,7 +79,9 @@ namespace Atlas.Playnite
             var lookup = _services.GetLookup();
             if (art == null || lookup == null) return null;
             var ct = Token(args);
-            var data = Task.Run(() => lookup.ImageAsync(art, ct), ct).GetAwaiter().GetResult();
+            ImageData data;
+            try { data = Task.Run(() => lookup.ImageAsync(art, ct), ct).GetAwaiter().GetResult(); }
+            catch (OperationCanceledException) { return null; }   // the user cancelled the download: no image, no exception
             return data == null || data.Bytes == null || data.Bytes.Length == 0
                 ? null
                 : new MetadataFile("atlas-" + name + Extension(data.ContentType), data.Bytes);
@@ -110,27 +112,38 @@ namespace Atlas.Playnite
             {
                 if (_loaded) return;
                 _loaded = true;
-                var lookup = _services.GetLookup();
-                if (lookup == null) { Result = LookupResult.Unavailable("Atlas is not set up: open the Atlas extension settings."); return; }
-                var query = BuildQuery(_options == null ? null : _options.GameData, _services.Settings.BaseUrl);
-                if (string.IsNullOrWhiteSpace(query.Name) && string.IsNullOrEmpty(query.KnownAtlasId)) { Result = new LookupResult { Outcome = LookupOutcome.NotFound }; return; }
-                var result = Task.Run(() => lookup.FindAsync(query, ct), ct).GetAwaiter().GetResult();
-                if (result.Outcome == LookupOutcome.Candidates && _chooser != null && _options != null && !_options.IsBackgroundDownload)
+                try { LoadCore(ct); }
+                catch (OperationCanceledException)
                 {
-                    var picked = _chooser(result.Candidates);
-                    if (picked != null) result = Task.Run(() => lookup.ChooseAsync(query, picked, ct), ct).GetAwaiter().GetResult();
+                    // The user cancelled the metadata download. Playnite gets no fields, never an exception (see the class summary).
+                    _meta = null; _art = null;
+                    Result = LookupResult.Unavailable("Cancelled.");
                 }
-                Result = result;
-                if (result.Outcome != LookupOutcome.Found || result.Record == null)
-                {
-                    _services.Log("Atlas gave no metadata for '" + query.Name + "': " + result.Outcome + (result.Message != null ? " (" + result.Message + ")" : ""));
-                    return;
-                }
-                _record = result.Record;
-                _meta = GameMapper.Map(_record, _services.Settings.BaseUrl);
-                if (!result.FromCache && !string.IsNullOrEmpty(_record.Id))
-                    _art = Task.Run(() => lookup.ArtworkAsync(_record.Id, ct), ct).GetAwaiter().GetResult();
             }
+        }
+
+        private void LoadCore(CancellationToken ct)
+        {
+            var lookup = _services.GetLookup();
+            if (lookup == null) { Result = LookupResult.Unavailable("Atlas is not set up: open the Atlas extension settings."); return; }
+            var query = BuildQuery(_options == null ? null : _options.GameData, _services.Settings.BaseUrl);
+            if (string.IsNullOrWhiteSpace(query.Name) && string.IsNullOrEmpty(query.KnownAtlasId)) { Result = new LookupResult { Outcome = LookupOutcome.NotFound }; return; }
+            var result = Task.Run(() => lookup.FindAsync(query, ct), ct).GetAwaiter().GetResult();
+            if (result.Outcome == LookupOutcome.Candidates && _chooser != null && _options != null && !_options.IsBackgroundDownload)
+            {
+                var picked = _chooser(result.Candidates);
+                if (picked != null) result = Task.Run(() => lookup.ChooseAsync(query, picked, ct), ct).GetAwaiter().GetResult();
+            }
+            Result = result;
+            if (result.Outcome != LookupOutcome.Found || result.Record == null)
+            {
+                _services.Log("Atlas gave no metadata for '" + query.Name + "': " + result.Outcome + (result.Message != null ? " (" + result.Message + ")" : ""));
+                return;
+            }
+            _record = result.Record;
+            _meta = GameMapper.Map(_record, _services.Settings.BaseUrl);
+            if (!result.FromCache && !string.IsNullOrEmpty(_record.Id))
+                _art = Task.Run(() => lookup.ArtworkAsync(_record.Id, ct), ct).GetAwaiter().GetResult();
         }
 
         internal static GameQuery BuildQuery(Game game, string baseUrl)

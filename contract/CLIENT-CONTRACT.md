@@ -82,9 +82,10 @@ Every media type is served under `/games` today. That is intentional, not a depr
   `include_view: true` to receive the record with the answer.
 - A title is evidence only when no id matches, and the answer is then a **candidate list for the user, never an
   automatic match**.
-- **A client may auto-assign only the reasons `id`, `redirect`, `crosswalk` and `exact`.** Every other reason
-  (`conflict`, fuzzy matches, `none`) is shown to the user or ignored. The answer's `assigned` flag says whether Atlas
-  considers the result assignable.
+- **A client may auto-assign only the identity reasons `id`, `redirect` and `crosswalk`.** Every other reason
+  (`exact`, which Atlas uses for an exact *title* match, `conflict`, fuzzy matches, `none`) is shown to the user or
+  ignored. The answer's `assigned` flag says whether Atlas itself assigned the result (it does for `exact`); a
+  client needs both an identity reason and `assigned` not `false`.
 - Write the Atlas id back to the host: `ProviderIds["Atlas"]` in Jellyfin; a link plus hidden field in Playnite.
 - The cases are in `fixtures/resolve/resolve-contract-v1.json` with their seeds. `tests/live/` replays all of them
   against a real Atlas.
