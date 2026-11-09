@@ -8,7 +8,8 @@ Rules, in order:
 * ``dotnet/``, ``contract/``, ``tools/``, ``catalogues/``, ``.github/`` and the repository root files that
   configure the build select **all** packages. So does any path we do not recognise (fail safe).
 * Documentation-only changes (``docs/``, root ``*.md``, issue and PR templates) select nothing.
-* ``tests/`` (repository-level Python tests) selects the Python lane only.
+* ``tests/`` (repository-level Python tests) selects the Python lane; ``tests/live/`` also selects the live lane,
+  so a change to the live tests is actually exercised against a real Atlas.
 
 Output is ``key=value`` lines (also appended to ``$GITHUB_OUTPUT``)::
 
@@ -49,7 +50,7 @@ def classify(files: list[str] | None, packages: list[str] | None = None) -> dict
     if files is None:
         return everything(every)
     selected: set[str] = set()
-    shared = python = False
+    shared = python = live_tests = False
     for raw in files:
         path = raw.strip().replace("\\", "/")
         if not path:
@@ -63,6 +64,7 @@ def classify(files: list[str] | None, packages: list[str] | None = None) -> dict
             continue  # packages/README.md and similar
         elif parts[0] == "tests":
             python = True
+            live_tests = live_tests or (len(parts) > 2 and parts[1] == "live")
         elif parts[0] in SHARED_ROOTS or len(parts) == 1:
             shared = True  # includes workflows, root config, LICENSE
         else:
@@ -71,7 +73,7 @@ def classify(files: list[str] | None, packages: list[str] | None = None) -> dict
     return {
         "python": shared or python,
         "contract": shared,
-        "live": bool(chosen),
+        "live": bool(chosen) or live_tests,
         "packages": chosen,
     }
 

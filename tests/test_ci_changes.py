@@ -54,6 +54,11 @@ def test_repo_python_tests_select_python_lane_only():
     assert r["python"] is True and r["packages"] == [] and r["live"] is False
 
 
+def test_live_tests_select_the_live_lane():
+    r = pick("tests/live/test_resolve_contract_live.py")
+    assert r["python"] is True and r["live"] is True and r["packages"] == []
+
+
 def test_docs_plus_package_still_only_package():
     assert pick("README.md", "packages/jellyfin/x.cs")["packages"] == ["jellyfin"]
 

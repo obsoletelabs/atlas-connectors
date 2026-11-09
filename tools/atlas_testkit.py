@@ -274,6 +274,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def strip_separator(command: list[str]) -> list[str]:
+    """Drop the leading ``--`` argparse leaves in REMAINDER; keep any later ``--`` (it belongs to the command)."""
+    return command[1:] if command[:1] == ["--"] else list(command)
+
+
 def run_command(node: dict[str, str], command: list[str], keep: bool) -> int:
     try:
         ids = seed(node["url"], node["bootstrap"], node["container"])
@@ -294,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd in {"up", "run"}:
             image = args.image or build_image(args.atlas_source, args.tag)
             if args.cmd == "run":
-                command = [c for c in args.command if c != "--"]
+                command = strip_separator(args.command)
                 if not command:
                     raise TestkitError("run needs a command after --")
             node = up(image)

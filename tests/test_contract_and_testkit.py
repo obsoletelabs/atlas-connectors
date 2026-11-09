@@ -159,7 +159,9 @@ def test_testkit_cli_requires_a_command_and_a_source(capsys):
     with pytest.raises(SystemExit):
         kit.build_parser().parse_args(["up"])
     args = kit.build_parser().parse_args(["run", "--image", "x", "--", "echo", "hi"])
-    assert [c for c in args.command if c != "--"] == ["echo", "hi"]
+    assert kit.strip_separator(args.command) == ["echo", "hi"]
+    inner = kit.build_parser().parse_args(["run", "--image", "x", "--", "pytest", "--", "-k", "a"])
+    assert kit.strip_separator(inner.command) == ["pytest", "--", "-k", "a"]
 
 
 def test_testkit_reports_missing_docker(monkeypatch, capsys):
