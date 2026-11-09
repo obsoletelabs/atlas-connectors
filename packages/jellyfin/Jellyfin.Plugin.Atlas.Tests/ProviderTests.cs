@@ -54,6 +54,21 @@ public class ProviderTests
     }
 
     [Fact]
+    public async Task An_exact_title_answer_to_an_id_resolve_is_never_applied()
+    {
+        // Jellyfin sends the title next to the ids; when no id matches, Atlas may still answer "exact" (title evidence). That is a
+        // candidate for Identify, never an automatic match (CONTRACT-C15 8.4).
+        var handler = Harness.BookHandler();
+        handler.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, "{\"results\":[{\"assigned\":true,\"canonical_id\":\"" + Harness.BookId + "\",\"reason\":\"exact\",\"method\":\"exact\",\"record\":" + Harness.Book + "}]}"));
+        using var h = new Harness(handler);
+
+        var r = await new AtlasBookProvider(() => h.Runtime).GetMetadata(Info("The Synthetic Lighthouse", ("Isbn", "9780000000019")), default);
+
+        Assert.False(r.HasMetadata);
+        Assert.Contains(handler.Requests, x => x.Uri.AbsolutePath.EndsWith("/resolve"));
+    }
+
+    [Fact]
     public async Task A_stored_atlas_id_skips_resolve_and_a_second_run_sends_the_etag()
     {
         var handler = Harness.BookHandler();

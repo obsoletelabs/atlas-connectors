@@ -271,3 +271,41 @@ public sealed class AtlasSeriesExternalId : AtlasExternalIdBase
 {
     public override bool Supports(IHasProviderIds item) => item is Series;
 }
+
+/// <summary>
+/// The link from an item to its record page on the configured Atlas node (CONTRACT-C15 8.4: "an IExternalId with a link to the record
+/// page"; since Jellyfin 10.10 the link comes from an <see cref="IExternalUrlProvider"/>, not from the IExternalId). The page path
+/// <c>/game/{id}</c> is the one the Playnite package links to; it is Atlas's web page for every media type (PROVISIONAL until checked
+/// against a live Atlas). The URL carries no token.
+/// </summary>
+public sealed class AtlasExternalUrlProvider : IExternalUrlProvider
+{
+    private readonly Func<AtlasRuntime> _runtime;
+
+    public AtlasExternalUrlProvider()
+        : this(null)
+    {
+    }
+
+    internal AtlasExternalUrlProvider(Func<AtlasRuntime> runtime)
+    {
+        _runtime = runtime ?? (() => AtlasRuntime.Current);
+    }
+
+    public string Name => "Atlas";
+
+    public IEnumerable<string> GetExternalUrls(BaseItem item)
+    {
+        var baseUri = _runtime()?.BaseUri;
+        var id = item is Book || item is Movie || item is Series ? AtlasLookup.AtlasIdOf(item.ProviderIds) : null;
+        if (baseUri == null || id == null)
+        {
+            yield break;
+        }
+
+        yield return RecordPage(baseUri, id);
+    }
+
+    public static string RecordPage(Uri baseUri, string atlasId)
+        => baseUri.AbsoluteUri.TrimEnd('/') + "/game/" + Uri.EscapeDataString(atlasId).Replace("%3A", ":", StringComparison.Ordinal);
+}
