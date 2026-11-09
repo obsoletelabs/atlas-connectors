@@ -1,6 +1,12 @@
 # Fixtures
 
-Synthetic data only, dedicated to the public domain (CC0 1.0). No network, no real catalogue content.
+Dedicated to the public domain (CC0 1.0). No network, no descriptions, artwork or other expressive content.
+
+**Not all of it is synthetic.** The resolve contract copied from Atlas seeds a few real games with bare facts only
+(title, release date, developer, a public Steam or IGDB numeric id: e.g. Portal 2, Valve, Steam app 620), and the
+`games/` and `forward-compat/` files were recorded from or derived from those seeds. Bare facts and public ids are
+not copyrightable expression, but they are not synthetic. The final Atlas-generated set (section 9.3) should be
+fully synthetic; until then, do not add any further real-world data.
 
 | Path | What it is | Origin |
 |---|---|---|

@@ -6,7 +6,8 @@ metadata into other tools. Read `README.md` and `contract/CLIENT-CONTRACT.md` fi
 ## Ground rules
 
 - **Talk HTTP to the client contract.** Never copy Atlas code, never depend on a field outside the `client-api` subset.
-- **Synthetic data only.** No real catalogue content, no provider data (Steam, IGDB, RAWG, Open Library), no
+- **Synthetic data only** (the scaffold's Atlas-origin game facts are a documented exception, see `LICENSING.md`).
+  No real catalogue content, no provider data (Steam, IGDB, RAWG, Open Library), no
   credentials or tokens, no personal data. Fixtures and vectors are CC0; code is MIT (`LICENSING.md`).
 - **Fixtures are generated, not hand-edited.** Record them with `tools/atlas_testkit.py record`; the final set comes from
   Atlas. After any change under `contract/`, run `python tools/contract_pin.py write` and commit `contract/SHA256SUMS`.

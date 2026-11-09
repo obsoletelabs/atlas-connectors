@@ -22,7 +22,7 @@ This is design reasoning, not legal advice; the owner may want a lawyer's view f
   with every target. Only a permissive licence satisfies all of them.
 - **Emby and Plex** are closed hosts. Only our own code is licensed here; a curated catalogue may refuse copyleft
   (not verified).
-- **Fixtures** are synthetic, so CC0 is possible and keeps them reusable by anyone.
+- **Fixtures** are synthetic or bare facts (see below), so CC0 is possible and keeps them reusable by anyone.
 
 If copyleft is wanted later, the recommendation in the design notes is GPL-3.0-or-later for the Playnite package
 only, keeping Jellyfin and the shared client permissive. That is an owner decision.
@@ -38,8 +38,13 @@ but to remove doubt the **copyright holder is expected to state in Atlas's `DATA
 outside contributions to those files.
 
 **Status: that statement is not yet made.** Until the owner makes it, the Atlas-origin files here rest on the
-reasoning above only. Only synthetic data is included: no provider data (Steam, IGDB, RAWG, Open Library) and no real
-copyrighted content.
+reasoning above only.
+
+**Real-world facts in the fixtures.** The Atlas resolve contract (and so the games recorded from it) names a few real
+games with bare facts: title, release date, developer and a public Steam or IGDB numeric id (for example Portal 2,
+Valve, Steam app 620). No descriptions, artwork, reviews or other expressive content, and nothing fetched from a
+provider API, is included. Facts and public identifiers are not copyrightable expression, but they are not synthetic
+either; the final Atlas-generated fixture set should replace them with synthetic records.
 
 ## Contributions
 
