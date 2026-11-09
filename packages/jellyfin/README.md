@@ -50,7 +50,7 @@ different patch level of the same line is **not verified**.
 | `Studios` | developer, publisher | de-duplicated |
 | Book `SeriesName`, `IndexNumber` | series name and position | the index only when the position is a whole number (`2`), never for `2.5` or `II` |
 | Book authors | `authors[]` | as `Author` people; blank names dropped |
-| `ProviderIds["Atlas"]` | Atlas id | shown as an external id on books, movies and series; a merged id is followed and replaced |
+| `ProviderIds["Atlas"]` | Atlas id | shown as an external id on books, movies and series, linked to `<atlas>/game/<id>` (an `IExternalUrlProvider`; the page path is the Playnite package's and is provisional); a merged id is followed and replaced |
 | Book `ProviderIds["Isbn"]` | `provider_ids.isbn` | |
 | Primary / Backdrop / Logo images | artwork | Atlas's `primary` per role, else the preferred one, else the first of that kind (`cover`/`poster` -> Primary). An unknown kind is never guessed into a role |
 
@@ -104,5 +104,6 @@ the zips, attaches them to a GitHub release and deploys `manifest.json` to Pages
 - Local test runs: the 10.11 (`net9.0`) tests ran on the **.NET 10** runtime through roll-forward, because the ASP.NET Core 9 runtime is not
   installed on the author's machine. CI installs .NET 9 and 10 and runs each ABI on its own runtime; that has not run yet either.
 - The release workflow has not run on GitHub. `upload-pages-artifact@v4` and `deploy-pages@v4` and the Pages setting are unchecked.
+- The record-page link `<atlas>/game/<id>` was not opened against a real Atlas web UI.
 - Jellyfin 10.10 and older (`net8.0`) are not built.
 - StyleCop/analyzer rules of the official template are not enabled (compiler warnings are errors, analyzers are not installed).

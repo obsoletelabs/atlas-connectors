@@ -156,6 +156,19 @@ public class MapperVectorTests
     }
 
     [Fact]
+    public void The_record_page_link_uses_the_configured_node_and_never_a_token()
+    {
+        using var h = new Harness(Harness.BookHandler());
+        var urls = new AtlasExternalUrlProvider(() => h.Runtime);
+        var book = new Book();
+        book.SetProviderId("Atlas", Harness.BookId);
+
+        Assert.Equal(new[] { "https://atlas.example.org/game/" + Harness.BookId }, urls.GetExternalUrls(book).ToArray());
+        Assert.Empty(urls.GetExternalUrls(new Movie()));
+        Assert.All(urls.GetExternalUrls(book), u => Assert.DoesNotContain(Harness.Token, u));
+    }
+
+    [Fact]
     public void Media_types_route_to_the_right_provider()
     {
         Assert.True(AtlasLookup.Accepts(ItemKind.Book, MediaTypeKind.Book));
