@@ -105,6 +105,59 @@ namespace Atlas.Playnite.Tests
             Assert.Null(p.GetName(Args));
         }
 
+        // Atlas answers reason "exact", assigned true, for an exact TITLE match (atlas/resolve.py title evidence). C15 8.4: a title
+        // is never an automatic match, so a background download applies nothing, and a manual one offers that id to the user.
+        private static string ExactTitleAnswer()
+        {
+            return "{\"results\":[{\"assigned\":true,\"canonical_id\":\"" + TestAtlas.PortalId + "\",\"reason\":\"exact\",\"method\":\"exact\","
+                 + "\"confidence\":1.0,\"candidates\":[]}]}";
+        }
+
+        [Fact]
+        public void An_exact_title_match_is_never_applied_by_a_background_download()
+        {
+            var h = TestAtlas.PortalHandler();
+            h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, ExactTitleAnswer()));
+            var chooserCalled = false;
+            var p = Provider(h, new Game("Portal 2") { PluginId = Guid.NewGuid(), GameId = "x" }, background: true, chooser: c => { chooserCalled = true; return c[0]; });
+
+            Assert.Null(p.GetName(Args));
+            Assert.Empty(p.AvailableFields);
+            Assert.False(chooserCalled);
+            Assert.Equal(LookupOutcome.Candidates, p.Result.Outcome);
+        }
+
+        [Fact]
+        public void An_exact_title_match_is_offered_to_the_user_in_a_manual_download()
+        {
+            var h = TestAtlas.PortalHandler();
+            h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, ExactTitleAnswer()));
+            h.On("POST", "/api/v2/games/batch", s => FakeHandler.Json(404, "{}"));
+            IReadOnlyList<Candidate> shown = null;
+            var p = Provider(h, new Game("Portal 2") { PluginId = Guid.NewGuid(), GameId = "x" }, background: false, chooser: c => { shown = c; return c[0]; });
+
+            Assert.Equal("Portal 2", p.GetName(Args));
+            Assert.Equal(TestAtlas.PortalId, shown.Single().Id);
+        }
+
+        [Fact]
+        public void A_cancelled_download_gives_no_fields_and_no_exception()
+        {
+            var h = TestAtlas.PortalHandler();
+            var p = Provider(h, SteamPortal());
+            using (var cts = new CancellationTokenSource())
+            {
+                cts.Cancel();
+                // Playnite sets CancelToken itself (non-public setter); the test sets it the same way.
+                var cancelled = new GetMetadataFieldArgs();
+                typeof(GetMetadataFieldArgs).GetProperty("CancelToken").GetSetMethod(true).Invoke(cancelled, new object[] { cts.Token });
+                Assert.Null(p.GetName(cancelled));
+                Assert.Null(p.GetCoverImage(cancelled));
+                Assert.Empty(p.AvailableFields);
+                Assert.Equal(LookupOutcome.Unavailable, p.Result.Outcome);
+            }
+        }
+
         private static string FuzzyAnswer()
         {
             return "{\"results\":[{\"assigned\":false,\"canonical_id\":null,\"reason\":\"fuzzy\",\"method\":\"title\",\"confidence\":0.6,"
