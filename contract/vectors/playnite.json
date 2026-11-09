@@ -6,12 +6,145 @@
     {
       "name": "day-precision release date keeps year, month and day",
       "record": "games/record-portal.json",
-      "expect": {"Name": "Portal 2", "ReleaseDate": {"Year": 2011, "Month": 4, "Day": 19}, "Developers": ["Valve"]}
+      "expect": {
+        "Name": "Portal 2",
+        "ReleaseDate": {
+          "Year": 2011,
+          "Month": 4,
+          "Day": 19
+        },
+        "Developers": [
+          "Valve"
+        ],
+        "Links": [
+          {
+            "Name": "Atlas",
+            "Url": "https://atlas.example.org/game/atlas:01m70bhdfwzc60xawvc1avtnv7"
+          }
+        ]
+      },
+      "expect_absent": [
+        "Description",
+        "Publishers",
+        "Series",
+        "Genres",
+        "Tags"
+      ]
     },
     {
       "name": "unknown fields and unknown vocabulary values are ignored, never fatal",
       "record": "forward-compat/record-unknown-members.json",
-      "expect": {"Name": "Forward Compatibility Probe", "ReleaseDate": {"Year": 2011, "Month": 4, "Day": 19}}
+      "expect": {
+        "Name": "Forward Compatibility Probe",
+        "ReleaseDate": {
+          "Year": 2011,
+          "Month": 4,
+          "Day": 19
+        }
+      }
+    },
+    {
+      "name": "year precision never gets a month or a day",
+      "record": "vectors/records/game-year-only.json",
+      "expect": {
+        "Name": "Synthetic Year Only",
+        "ReleaseDate": {
+          "Year": 1998
+        }
+      }
+    },
+    {
+      "name": "declared precision year wins over a longer date text",
+      "record": "vectors/records/game-declared-year-only.json",
+      "expect": {
+        "Name": "Synthetic Declared Year",
+        "ReleaseDate": {
+          "Year": 1998
+        }
+      }
+    },
+    {
+      "name": "month precision never gets a day",
+      "record": "vectors/records/game-month-only.json",
+      "expect": {
+        "Name": "Synthetic Month Only",
+        "ReleaseDate": {
+          "Year": 2003,
+          "Month": 9
+        }
+      }
+    },
+    {
+      "name": "no date gives no release date",
+      "record": "vectors/records/game-no-date.json",
+      "expect": {
+        "Name": "Synthetic No Date"
+      },
+      "expect_absent": [
+        "ReleaseDate"
+      ]
+    },
+    {
+      "name": "an unparseable or impossible date gives no release date",
+      "record": "vectors/records/game-bad-date.json",
+      "expect": {
+        "Name": "Synthetic Bad Date"
+      },
+      "expect_absent": [
+        "ReleaseDate"
+      ]
+    },
+    {
+      "name": "rich record: facts, series, first 10 subjects are genres, the rest tags (D15.12), duplicates dropped",
+      "record": "vectors/records/game-rich.json",
+      "expect": {
+        "Name": "Synthetic Rich Game",
+        "ReleaseDate": {
+          "Year": 2010,
+          "Month": 10,
+          "Day": 10
+        },
+        "Description": "A made-up game used only to test field mapping.",
+        "Developers": [
+          "Example Studio"
+        ],
+        "Publishers": [
+          "Placeholder Publishing"
+        ],
+        "Series": [
+          "The Example Saga"
+        ],
+        "Genres": [
+          "Puzzle",
+          "Action",
+          "Adventure",
+          "Strategy",
+          "Racing",
+          "Sports",
+          "Rhythm",
+          "Platformer",
+          "Shooter",
+          "Simulation"
+        ],
+        "Tags": [
+          "Indie",
+          "Co-op"
+        ]
+      }
+    },
+    {
+      "name": "an unknown media_type value still maps the shared fields",
+      "record": "vectors/records/game-unknown-media-type.json",
+      "expect": {
+        "Name": "Synthetic Unknown Media Type",
+        "ReleaseDate": {
+          "Year": 2020,
+          "Month": 1,
+          "Day": 1
+        }
+      }
     }
-  ]
+  ],
+  "base_url": "https://atlas.example.org/",
+  "record_roots": "`record` is relative to ../fixtures/, or to ../ when it starts with vectors/"
 }

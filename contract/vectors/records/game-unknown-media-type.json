@@ -1,0 +1,15 @@
+{
+  "first_release": {
+    "date": "2020-01-01",
+    "precision": "day"
+  },
+  "id": "atlas:00000000000000000000000007",
+  "media_type": "hologram",
+  "platform_family": "holographic",
+  "provider_ids": {
+    "synthetic": "v7"
+  },
+  "redirected_from": null,
+  "title": "Synthetic Unknown Media Type",
+  "version": 1
+}
