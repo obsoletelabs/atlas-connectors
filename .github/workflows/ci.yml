@@ -105,9 +105,10 @@ jobs:
       - name: Test (vectors, provider, settings, DPAPI) on .NET Framework 4.8
         run: dotnet test packages/playnite/Atlas.Playnite.Tests -c Release --logger "trx;LogFileName=atlas-playnite.trx" --results-directory test-results
       - name: Pack the .pext and check it
+        shell: bash
         run: |
           python packages/playnite/pack.py --no-build
-          python packages/playnite/pack.py --verify packages/playnite/dist/Atlas_Metadata-0.1.0.pext
+          for f in packages/playnite/dist/*.pext; do python packages/playnite/pack.py --verify "$f"; done
       - name: Packaging script tests
         run: |
           python -m pip install pytest
