@@ -6,3 +6,4 @@ obj/
 *.pext
 .validation/
 .venv/
+packages/playnite/dist/

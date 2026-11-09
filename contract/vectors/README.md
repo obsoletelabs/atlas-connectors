@@ -17,7 +17,12 @@ Each connector's tests load its vector file and compare. One file per connector:
 Rules (CONTRACT-C15 section 8.4): a day is never invented (partial dates stay partial), unknown vocabulary
 values map to unknown/other, unknown fields are ignored.
 
-Status: `playnite.json` holds two cases as the format example (one derived from the recorded Portal 2 record, one
-from the forward-compatibility probe). The `expect` field names follow the Playnite SDK property names but are
-**not yet checked against the SDK**; X1 (Playnite package) does that and completes the file. The Jellyfin vectors
+`expect` lists host fields that must equal the given value; `expect_absent` lists fields that must be null or empty. Field names
+are the Playnite SDK `GameMetadata` property names (checked against PlayniteSDK 6.18.0): `Name`, `Description`, `ReleaseDate`
+(`Year` plus `Month` and `Day` only when present), `Developers`, `Publishers`, `Series`, `Genres`, `Tags` (lists of names), `Links`
+(`Name` and `Url`). `base_url` is the Atlas address the connector is configured with when the case runs.
+A `record` starting with `vectors/` is a synthetic record kept next to the vectors (`records/`, CC0); any other `record` is a
+file under `../fixtures/`.
+
+Status: `playnite.json` is complete for Playnite connector 0.1.0 (`packages/playnite`, which runs it). The Jellyfin vectors
 arrive with X2.

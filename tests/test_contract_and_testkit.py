@@ -43,16 +43,51 @@ def test_fixtures_hold_no_credentials():
         assert "bearer " not in text and '"token"' not in text and "secret" not in text, path
 
 
+def _vector_record(case):
+    rel = case["record"]
+    base = CONTRACT if rel.startswith("vectors/") else CONTRACT / "fixtures"
+    return json.loads((base / rel).read_text(encoding="utf-8"))
+
+
+def _expected_date(record):
+    """An independent, tiny re-statement of the rule (never invent a month or a day) to cross-check the vector file."""
+    first = record.get("first_release")
+    if not isinstance(first, dict):
+        return None
+    text, precision = str(first.get("date") or ""), first.get("precision")
+    parts = text.split("-")
+    if not parts[0].isdigit() or len(parts[0]) != 4 or len(parts) > 3:
+        return None
+    out = {"Year": int(parts[0])}
+    if len(parts) > 1 and precision in ("month", "day"):
+        out["Month"] = int(parts[1])
+    if len(parts) > 2 and precision == "day":
+        out["Day"] = int(parts[2])
+    return out
+
+
 def test_playnite_vectors_agree_with_their_records():
     vectors = json.loads((CONTRACT / "vectors" / "playnite.json").read_text(encoding="utf-8"))
-    assert vectors["vector_version"] == 1
+    assert vectors["vector_version"] == 1 and vectors["base_url"].endswith("/")
+    seen_names = set()
     for case in vectors["cases"]:
-        record = json.loads((CONTRACT / "fixtures" / case["record"]).read_text(encoding="utf-8"))
-        assert record["title"] == case["expect"]["Name"]
-        first = record["first_release"]
-        assert first["precision"] == "day"
-        year, month, day = (int(x) for x in first["date"].split("-"))
-        assert case["expect"]["ReleaseDate"] == {"Year": year, "Month": month, "Day": day}
+        assert case["name"] not in seen_names
+        seen_names.add(case["name"])
+        record = _vector_record(case)
+        assert record["title"] == case["expect"]["Name"], case["name"]
+        if "ReleaseDate" in case["expect"]:
+            assert case["expect"]["ReleaseDate"] == _expected_date(record), case["name"]
+        if "ReleaseDate" in case.get("expect_absent", []):
+            # either no first_release or an impossible date
+            assert _expected_date(record) is None or record.get("first_release", {}).get("date") == "soon", case["name"]
+        assert not set(case["expect"]) & set(case.get("expect_absent", [])), case["name"]
+
+
+def test_vector_records_are_synthetic_and_contain_no_secrets():
+    for path in (CONTRACT / "vectors" / "records").glob("*.json"):
+        text = path.read_text(encoding="utf-8").lower()
+        assert "token" not in text and "secret" not in text and "password" not in text, path
+        assert json.loads(text)["title"].startswith("synthetic "), path
 
 
 def test_forward_compat_record_really_has_unknown_members():

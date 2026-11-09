@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Atlas metadata provider for Playnite (.pext). net462 = the Playnite SDK's framework (checked 2026-11-09, see docs/VENDOR-FACTS.md).
+       Atlas.Client is compiled in as SOURCE (dotnet/README.md), with the Newtonsoft adapter. Playnite itself references
+       Newtonsoft.Json 10.0.3 and cannot load two versions, so this project compiles against 10.0.3 and does NOT ship it
+       (ExcludeAssets=runtime): the .pext carries only Atlas.Playnite.dll. -->
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <UseWPF>true</UseWPF>
+    <AtlasJson>Newtonsoft</AtlasJson>
+    <RootNamespace>Atlas.Playnite</RootNamespace>
+    <AssemblyName>Atlas.Playnite</AssemblyName>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+  <Import Project="..\..\..\dotnet\Atlas.Client\Atlas.Client.Source.props" />
+  <ItemGroup>
+    <PackageReference Include="PlayniteSDK" Version="6.18.0" ExcludeAssets="runtime" />
+    <!-- 10.0.3 = what Playnite loads. NU1903 (known DoS on deeply nested JSON, fixed in 13.0.1) is accepted only because the
+         running copy is Playnite's own, and the adapter caps depth at 64 (MaxDepth). -->
+    <PackageReference Include="Newtonsoft.Json" Version="10.0.3" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\extension.yaml" Link="extension.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\icon.png" Link="icon.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NU1903;NU1902</NoWarn>
+  </PropertyGroup>
+</Project>

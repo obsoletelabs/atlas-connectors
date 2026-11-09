@@ -1,0 +1,38 @@
+<UserControl x:Class="Atlas.Playnite.AtlasSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" MaxWidth="640" HorizontalAlignment="Left">
+            <TextBlock Text="Atlas address" FontWeight="Bold" />
+            <TextBox Margin="0,4,0,0" Text="{Binding BaseUrl, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.7"
+                       Text="For example https://atlas.example.org/ . Leave empty to switch the Atlas provider off." />
+            <CheckBox Margin="0,8,0,0" IsChecked="{Binding AllowPlainHttp}"
+                      Content="Allow plain http on a trusted network (the token is sent unencrypted)" />
+
+            <TextBlock Margin="0,20,0,0" Text="Access" FontWeight="Bold" />
+            <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding TokenState}" />
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <Button Content="Pair with Atlas" Command="{Binding PairCommand}" Padding="12,4" />
+                <Button Content="Cancel pairing" Command="{Binding CancelPairingCommand}" Padding="12,4" Margin="8,0,0,0" />
+                <Button Content="Forget token" Command="{Binding ForgetTokenCommand}" Padding="12,4" Margin="8,0,0,0" />
+            </StackPanel>
+            <TextBlock Margin="0,8,0,0" Text="Code" />
+            <TextBox IsReadOnly="True" FontSize="22" FontFamily="Consolas" Text="{Binding PairCode, Mode=OneWay}" />
+            <TextBlock Margin="0,8,0,0" Text="Approve it at" />
+            <TextBox IsReadOnly="True" Text="{Binding PairUrl, Mode=OneWay}" />
+            <TextBlock Margin="0,12,0,0" Text="Or paste a read token (made on Atlas under your account):" />
+            <PasswordBox x:Name="TokenBox" Margin="0,4,0,0" PasswordChanged="OnTokenChanged" />
+
+            <TextBlock Margin="0,20,0,0" Text="Offline cache" FontWeight="Bold" />
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="Use a saved answer for up to " VerticalAlignment="Center" />
+                <TextBox Width="48" Text="{Binding CacheTtlDays, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Text=" days when Atlas cannot be reached" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <Button Margin="0,20,0,0" HorizontalAlignment="Left" Padding="12,4" Content="Test connection" Command="{Binding TestCommand}" />
+            <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding Status}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
