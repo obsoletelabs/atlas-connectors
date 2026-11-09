@@ -14,7 +14,7 @@ This is design reasoning, not legal advice; the owner may want a lawyer's view f
 - **The connectors are not derivative works of Atlas.** They talk to Atlas over HTTP and copy no Atlas code. AGPL
   section 13 (network use) binds whoever runs a *modified Atlas*, not its API clients.
 - **They load into other people's programs.** A Jellyfin plugin runs inside the Jellyfin server process and links its
-  assemblies. Jellyfin is GPL-2.0 (verified on its GitHub licence metadata on 2026-11-09; whether individual files say
+  assemblies. Jellyfin is GPL-2.0 (verified on its GitHub licence metadata on 2026-11-09; its NuGet packages declare GPL-3.0-only, so the exact terms are unresolved, see `docs/VENDOR-FACTS.md`; whether individual files say
   "or later" was **not** checked). AGPL-3.0 is compatible with GPL-3.0 only, and not with GPL-2.0-only, so an AGPL
   Jellyfin plugin is risky. MIT is safe. A Playnite extension loads into Playnite, whose SDK is MIT. The Playnite
   add-on database maintainers may not welcome copyleft (not verified).

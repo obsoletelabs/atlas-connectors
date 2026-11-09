@@ -1,12 +1,20 @@
 name: release-jellyfin
 
-# Fires on tags jellyfin-v<semver> and builds ONLY the Jellyfin package (CONTRACT-C15 sections 8.2 and 12).
+# Fires on tags jellyfin-v<semver> and builds ONLY the Jellyfin package (CONTRACT-C15 sections 8.2, 8.3 and 12).
+# Steps: validate the tag against the package version, run the offline tests and both ABI test runs, build and pack one zip per
+# supported Jellyfin ABI, regenerate the repository manifest from the zips (checksums are computed, never typed), attach the zips and
+# checksums to a GitHub release, and publish manifest.json to GitHub Pages.
+# NOT YET RUN on GitHub (this workflow was written and its steps run locally, not as a workflow). The first real tag is the first test.
+# One-time setup the owner must do: enable GitHub Pages with source "GitHub Actions" in the repository settings.
 on:
   push:
     tags: ["jellyfin-v*"]
 
 permissions:
   contents: write
+
+env:
+  PAGES_MANIFEST_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/jellyfin/manifest.json
 
 jobs:
   release:
@@ -16,16 +24,64 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Validate the tag
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+      - name: Validate the tag against the package version
         run: |
           python tools/ci_changes.py --tag "$GITHUB_REF_NAME" | tee target.txt
           grep -qx "package=jellyfin" target.txt
+          version=$(sed -n 's/^version=//p' target.txt)
+          csproj=$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' packages/jellyfin/Jellyfin.Plugin.Atlas/Jellyfin.Plugin.Atlas.csproj | head -1)
+          if [ "$version" != "$csproj" ]; then
+            echo "::error::Tag version $version differs from the csproj version $csproj."
+            exit 1
+          fi
       - name: Offline tests and contract pins
         run: |
           python -m pip install pytest
           python -m pytest tests -q
           python tools/contract_pin.py check
-      - name: Build per supported ABI, attach zips and checksums, regenerate the repository manifest for Pages
+      - name: Test against both Jellyfin ABIs
         run: |
-          echo "::error::The Jellyfin package does not exist yet (PR X2). Refusing to publish an empty release."
-          exit 1
+          dotnet test packages/jellyfin/Jellyfin.Plugin.Atlas.Tests -c Release -p:JellyfinAbi=10.11
+          dotnet test packages/jellyfin/Jellyfin.Plugin.Atlas.Tests -c Release -p:JellyfinAbi=12
+      - name: Build and pack one zip per ABI
+        run: |
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          python packages/jellyfin/pack.py
+      - name: Regenerate the repository manifest from the zips
+        run: |
+          mkdir -p site/jellyfin
+          # earlier releases stay in the manifest; the first release has no Pages manifest yet
+          curl -fsSL "$PAGES_MANIFEST_URL" -o existing.json || echo "no existing manifest (first release)"
+          existing=""
+          if [ -s existing.json ] && python -c "import json;json.load(open('existing.json'))"; then existing="--existing existing.json"; fi
+          python tools/gen_catalogues.py jellyfin --artifacts packages/jellyfin/dist \
+            --download-base "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
+            $existing --out site/jellyfin/manifest.json
+          python tools/gen_catalogues.py verify --manifest site/jellyfin/manifest.json --artifacts packages/jellyfin/dist
+      - name: Attach the zips and checksums to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "Atlas for Jellyfin ${GITHUB_REF_NAME#jellyfin-v}" \
+            --notes-file packages/jellyfin/CHANGELOG.md packages/jellyfin/dist/*
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  pages:
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
