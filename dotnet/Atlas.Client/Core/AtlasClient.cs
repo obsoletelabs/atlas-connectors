@@ -311,17 +311,21 @@ namespace Atlas.Client
         /// <summary>An artwork URL from Atlas: relative to the node, or absolute on the node's own origin. Anything else is refused.</summary>
         private Uri SameOrigin(string url)
         {
-            Uri abs;
-            if (Uri.TryCreate(url, UriKind.Absolute, out abs))
+            // A path is checked first: on Linux/macOS, Uri.TryCreate("/media/x", UriKind.Absolute) succeeds as file:///media/x,
+            // so testing "absolute?" first would refuse every relative artwork URL there (Jellyfin servers, the CI runner).
+            if (url.StartsWith("/", StringComparison.Ordinal))
             {
-                if (!string.Equals(abs.GetLeftPart(UriPartial.Authority), _origin.GetLeftPart(UriPartial.Authority).TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
-                    throw new AtlasProtocolException("Atlas listed an artwork URL on a different host; it will not be fetched with the token.");
-                return abs;
+                if (url.StartsWith("//", StringComparison.Ordinal) || url.StartsWith("/\\", StringComparison.Ordinal))
+                    throw new AtlasProtocolException("Atlas listed an artwork URL that is not a path on the node.");
+                var path = _prefix.Length > 0 && !url.StartsWith(_prefix + "/", StringComparison.Ordinal) ? _prefix + url : url;
+                return new Uri(_origin, path);
             }
-            if (!url.StartsWith("/", StringComparison.Ordinal) || url.StartsWith("//", StringComparison.Ordinal))
+            Uri abs;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out abs) || (abs.Scheme != Uri.UriSchemeHttps && abs.Scheme != Uri.UriSchemeHttp))
                 throw new AtlasProtocolException("Atlas listed an artwork URL that is not a path on the node.");
-            var path = _prefix.Length > 0 && !url.StartsWith(_prefix + "/", StringComparison.Ordinal) ? _prefix + url : url;
-            return new Uri(_origin, path);
+            if (!string.Equals(abs.GetLeftPart(UriPartial.Authority), _origin.GetLeftPart(UriPartial.Authority).TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                throw new AtlasProtocolException("Atlas listed an artwork URL on a different host; it will not be fetched with the token.");
+            return abs;
         }
 
         private JsonNode Parse(Reply reply)
