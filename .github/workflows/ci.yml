@@ -1,0 +1,154 @@
+name: ci
+
+# Path-filtered CI (CONTRACT-C15 section 12). tools/ci_changes.py decides what runs:
+#   packages/<p>/   -> package <p> only
+#   dotnet/ contract/ tools/ catalogues/ .github/ root files, or any unknown path -> every package
+#   docs only -> nothing
+#   main and tags -> everything
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      atlas_ref:
+        description: Atlas ref for the live lane (default is the pinned one below)
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    outputs:
+      python: ${{ steps.sel.outputs.python }}
+      contract: ${{ steps.sel.outputs.contract }}
+      live: ${{ steps.sel.outputs.live }}
+      packages: ${{ steps.sel.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - id: sel
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REF: ${{ github.ref_name == 'main' && 'main' || github.ref }}
+        run: python tools/ci_changes.py
+
+  python:
+    needs: gate
+    if: needs.gate.outputs.python == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pytest
+      - name: Offline tests (change detection, contract pins, testkit logic)
+        run: python -m pytest tests -q
+      - name: Contract pins hold
+        if: needs.gate.outputs.contract == 'true'
+        run: python tools/contract_pin.py check
+
+  # One job per package. The scaffold has no package code yet (X1 Playnite, X2 Jellyfin), so these only prove the
+  # path filter and the job wiring. They must be replaced by real build + test steps in those PRs.
+  package-playnite:
+    needs: gate
+    if: contains(format(',{0},', needs.gate.outputs.packages), ',playnite,')
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and test (not implemented in the scaffold)
+        shell: bash
+        run: |
+          echo "::notice::packages/playnite has no code yet (PR X1). Selected by the path filter; nothing to build."
+          test -f packages/playnite/README.md
+
+  package-jellyfin:
+    needs: gate
+    if: contains(format(',{0},', needs.gate.outputs.packages), ',jellyfin,')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and test (not implemented in the scaffold)
+        run: |
+          echo "::notice::packages/jellyfin has no code yet (PR X2). Selected by the path filter; nothing to build."
+          test -f packages/jellyfin/README.md
+
+  # The live lane: a REAL Atlas, seeded with synthetic data, and the replay of the resolve contract against it.
+  # Atlas is private, so the source is fetched with ATLAS_CHECKOUT_TOKEN (read-only contents on the Atlas repository)
+  # exactly as the plugins repository does. Without the secret the lane is SKIPPED LOUDLY (warning + summary); once
+  # the secret exists any failure fails the job. Fork pull requests have no secrets and skip it. Once Atlas publishes
+  # a container image, replace the build with a pinned image digest and drop the secret (decision D15.19).
+  live-atlas:
+    needs: gate
+    if: needs.gate.outputs.live == 'true' && github.event.pull_request.head.repo.fork != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      ATLAS_REPOSITORY: obsoletelabs/unnamed_tracking_metadata
+      # PLACEHOLDER pin: a branch name is not a pin. Replace with a commit SHA of the Atlas release that ships
+      # client_api (A24) and bump it deliberately. The resolve contract needs the programme line, not plain v2.
+      ATLAS_REF: ${{ inputs.atlas_ref || 'programme/p7-atlas-metrics' }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: access
+        env:
+          ATLAS_TOKEN: ${{ secrets.ATLAS_CHECKOUT_TOKEN }}
+        run: |
+          if [ -z "$ATLAS_TOKEN" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Secret ATLAS_CHECKOUT_TOKEN is not configured, so the live Atlas lane was SKIPPED."
+            echo "### Live Atlas lane skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "Add the \`ATLAS_CHECKOUT_TOKEN\` secret (read-only contents on \`$ATLAS_REPOSITORY\`) to enable it." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.access.outputs.available == 'true'
+        with:
+          repository: ${{ env.ATLAS_REPOSITORY }}
+          ref: ${{ env.ATLAS_REF }}
+          token: ${{ secrets.ATLAS_CHECKOUT_TOKEN }}
+          path: .validation/atlas
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        if: steps.access.outputs.available == 'true'
+        with:
+          python-version: "3.12"
+      - if: steps.access.outputs.available == 'true'
+        run: python -m pip install pytest
+      - name: Build Atlas, start it, seed it, replay the resolve contract
+        if: steps.access.outputs.available == 'true'
+        run: |
+          python tools/atlas_testkit.py run --atlas-source .validation/atlas --tag atlas-testkit:ci \
+            -- python -m pytest tests/live -q
+
+  # The single required status. A job may be skipped only when the gate did not select it.
+  required:
+    needs: [gate, python, package-playnite, package-jellyfin, live-atlas]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every selected job passed (a skipped live lane only warns)
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["RESULTS"])
+          bad = {k: v["result"] for k, v in needs.items() if v["result"] in {"failure", "cancelled"}}
+          print({k: v["result"] for k, v in needs.items()})
+          sys.exit(1 if bad else 0)
+          PY

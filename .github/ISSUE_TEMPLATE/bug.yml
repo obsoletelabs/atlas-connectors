@@ -1,0 +1,24 @@
+name: Bug report
+description: A connector misbehaves
+labels: [bug]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options: [playnite, jellyfin, emby, plex, contract, tools]
+    validations: {required: true}
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Connector version, host version (Playnite/Jellyfin), Atlas version and its client_api.version
+    validations: {required: true}
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect
+    validations: {required: true}
+  - type: markdown
+    attributes:
+      value: Do not paste Atlas tokens or logs that contain them.
