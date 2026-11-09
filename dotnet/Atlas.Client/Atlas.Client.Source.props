@@ -1,0 +1,24 @@
+<Project>
+  <!-- Import from a package project:
+         <Import Project="..\..\dotnet\Atlas.Client\Atlas.Client.Source.props" />
+       and pick the host's serializer:
+         <AtlasJson>Newtonsoft</AtlasJson>        (Playnite)
+         <AtlasJson>SystemTextJson</AtlasJson>    (Jellyfin)
+       The package then needs only that serializer (the host's own), never a second one. -->
+  <PropertyGroup>
+    <AtlasClientDir>$(MSBuildThisFileDirectory)</AtlasClientDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(AtlasClientDir)Core\**\*.cs" Link="Atlas.Client\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="$(AtlasClientDir)Json\NewtonsoftJsonAdapter.cs" Link="Atlas.Client\Json\NewtonsoftJsonAdapter.cs"
+             Condition="'$(AtlasJson)' == 'Newtonsoft'" />
+    <Compile Include="$(AtlasClientDir)Json\SystemTextJsonAdapter.cs" Link="Atlas.Client\Json\SystemTextJsonAdapter.cs"
+             Condition="'$(AtlasJson)' == 'SystemTextJson'" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(AtlasJson)' == 'Newtonsoft'">
+    <DefineConstants>$(DefineConstants);ATLAS_JSON_NEWTONSOFT</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(AtlasJson)' == 'SystemTextJson'">
+    <DefineConstants>$(DefineConstants);ATLAS_JSON_STJ</DefineConstants>
+  </PropertyGroup>
+</Project>

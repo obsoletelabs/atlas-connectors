@@ -27,6 +27,7 @@ metadata into other tools. Read `README.md` and `contract/CLIENT-CONTRACT.md` fi
 python -m pip install pytest
 python -m pytest tests -q                       # offline: change detection, pins, testkit logic
 python tools/contract_pin.py check              # contract/ matches contract/SHA256SUMS
+dotnet test dotnet/Atlas.Client.Tests           # shared client vs contract/fixtures, no network (.NET 10 SDK)
 python tools/atlas_testkit.py run --image <atlas-image> -- python -m pytest tests/live -q   # needs Docker
 ```
 

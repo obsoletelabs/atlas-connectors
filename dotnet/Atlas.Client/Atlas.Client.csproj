@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Atlas.Client is NOT released as a package. Each connector compiles these sources in through
+       Atlas.Client.Source.props (see ../README.md). This project exists so the sources build and are tested as a unit.
+       C# 7.3 on purpose: consumers (Playnite, net462) compile the files with their own, possibly old, language version. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>Atlas.Client</RootNamespace>
+    <AssemblyName>Atlas.Client</AssemblyName>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <DefineConstants>$(DefineConstants);ATLAS_JSON_STJ;ATLAS_JSON_NEWTONSOFT</DefineConstants>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>
