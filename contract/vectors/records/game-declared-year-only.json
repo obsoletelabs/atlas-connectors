@@ -1,0 +1,15 @@
+{
+  "first_release": {
+    "date": "1998-05-17",
+    "precision": "year"
+  },
+  "id": "atlas:00000000000000000000000002",
+  "media_type": "game",
+  "provider_ids": {
+    "synthetic": "v2"
+  },
+  "redirected_from": null,
+  "release_date": "1998-05-17",
+  "title": "Synthetic Declared Year",
+  "version": 1
+}

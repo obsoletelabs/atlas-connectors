@@ -86,19 +86,40 @@ jobs:
           path: test-results/*.trx
           if-no-files-found: ignore
 
-  # One job per package. The scaffold has no package code yet (X1 Playnite, X2 Jellyfin), so these only prove the
-  # path filter and the job wiring. They must be replaced by real build + test steps in those PRs.
+  # One job per package. Jellyfin is still a placeholder (PR X2); Playnite builds, tests and packs for real.
+  # Windows only: the Playnite SDK, WPF and DPAPI are Windows/.NET Framework things; the tests run on .NET Framework 4.8.
   package-playnite:
     needs: gate
     if: contains(format(',{0},', needs.gate.outputs.packages), ',playnite,')
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
-      - name: Build and test (not implemented in the scaffold)
-        shell: bash
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build the extension (net462, C# 7.3, warnings are errors)
+        run: dotnet build packages/playnite/Atlas.Playnite -c Release
+      - name: Test (vectors, provider, settings, DPAPI) on .NET Framework 4.8
+        run: dotnet test packages/playnite/Atlas.Playnite.Tests -c Release --logger "trx;LogFileName=atlas-playnite.trx" --results-directory test-results
+      - name: Pack the .pext and check it
         run: |
-          echo "::notice::packages/playnite has no code yet (PR X1). Selected by the path filter; nothing to build."
-          test -f packages/playnite/README.md
+          python packages/playnite/pack.py --no-build
+          python packages/playnite/pack.py --verify packages/playnite/dist/Atlas_Metadata-0.1.0.pext
+      - name: Packaging script tests
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_playnite_package.py -q
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: atlas-playnite
+          path: |
+            test-results/*.trx
+            packages/playnite/dist/*
+          if-no-files-found: ignore
 
   package-jellyfin:
     needs: gate

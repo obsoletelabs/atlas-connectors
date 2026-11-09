@@ -1,0 +1,12 @@
+Id: Atlas_Metadata_07b50695a9e64d21b11a6d94e0df4f3f
+Name: Atlas metadata
+Author: obsoletelabs
+Version: 0.1.0
+Module: Atlas.Playnite.dll
+Type: MetadataProvider
+Icon: icon.png
+Links:
+    - Name: Website
+      Url: https://github.com/obsoletelabs/atlas-provider-adapters
+    - Name: Changelog
+      Url: https://github.com/obsoletelabs/atlas-provider-adapters/blob/main/packages/playnite/CHANGELOG.md

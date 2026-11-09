@@ -1,0 +1,42 @@
+{
+  "facts": {
+    "description": "A made-up game used only to test field mapping.",
+    "developer": [
+      "Example Studio"
+    ],
+    "publisher": [
+      "Placeholder Publishing"
+    ],
+    "series": {
+      "name": "The Example Saga",
+      "position": "3"
+    }
+  },
+  "first_release": {
+    "date": "2010-10-10",
+    "precision": "day"
+  },
+  "id": "atlas:00000000000000000000000006",
+  "media_type": "game",
+  "provider_ids": {
+    "synthetic": "v6"
+  },
+  "redirected_from": null,
+  "subjects": [
+    "Puzzle",
+    "Action",
+    "Adventure",
+    "Strategy",
+    "Racing",
+    "Sports",
+    "Rhythm",
+    "Platformer",
+    "Shooter",
+    "Simulation",
+    "Indie",
+    "Co-op",
+    "puzzle"
+  ],
+  "title": "Synthetic Rich Game",
+  "version": 1
+}

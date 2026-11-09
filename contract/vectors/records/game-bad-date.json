@@ -1,0 +1,15 @@
+{
+  "first_release": {
+    "date": "soon",
+    "precision": "day"
+  },
+  "id": "atlas:00000000000000000000000005",
+  "media_type": "game",
+  "provider_ids": {
+    "synthetic": "v5"
+  },
+  "redirected_from": null,
+  "release_date": "2011-02-31",
+  "title": "Synthetic Bad Date",
+  "version": 1
+}
