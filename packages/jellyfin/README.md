@@ -47,18 +47,22 @@ different patch level of the same line is **not verified**.
 | `ProductionYear` | `first_release` year | set at every precision |
 | `Overview` | description | when Atlas has one |
 | `Genres`, `Tags` | subjects | first 10 genres, the rest tags (decision D15.12), duplicates dropped |
-| `Studios` | developer, publisher | de-duplicated |
+| `Studios` | developer, publisher | de-duplicated; on a book, a name that is one of its creators (Atlas repeats the author as `developer`) is not a studio |
 | Book `SeriesName`, `IndexNumber` | series name and position | the index only when the position is a whole number (`2`), never for `2.5` or `II` |
-| Book authors | `authors[]` | as `Author` people; blank names dropped |
+| Book people | `authors[]` with `role` | `author` (or no role) as `Author`; `translator`, `illustrator`, `editor` as those kinds; `narrator` and any later role as `Unknown`; blank names dropped |
 | `ProviderIds["Atlas"]` | Atlas id | shown as an external id on books, movies and series, linked to `<atlas>/game/<id>` (an `IExternalUrlProvider`; the page path is the Playnite package's and is provisional); a merged id is followed and replaced |
-| Book `ProviderIds["Isbn"]` | `provider_ids.isbn` | |
+| Book `ProviderIds["Isbn"]` | `provider_ids.isbn`, else the first edition's `isbn_13` | |
 | Primary / Backdrop / Logo images | artwork | Atlas's `primary_by_role` (cover, background, logo), else the preferred one, else the first of that kind (`cover`/`poster` -> Primary). An unknown kind is never guessed into a role |
 
-Expected values for 8 cases (books, movie, series, anime, partial dates, unknown members) are in `contract/vectors/jellyfin.json` and are run by the unit
+Expected values for 10 cases (books, creator roles, movie, series, anime, partial dates, unknown members) are in `contract/vectors/jellyfin.json` and are run by the unit
 tests against the real `Book`, `Movie` and `Series` classes.
 
-**Identity first.** `Isbn`, `Tmdb`, `Imdb`, `Tvdb` and `AniList` provider ids are sent to Atlas `POST /resolve` as `isbn`, `tmdb`, `imdb`, `tvdb`, `anilist`
-(**the namespace names are provisional**: Atlas has not published them). Atlas assigns by itself only for the reasons `id`, `redirect`,
+**Identity first.** `Isbn`, `Tmdb`, `Imdb`, `Tvdb` and `AniList` provider ids are sent to Atlas `POST /resolve` as `isbn`, `tmdb`, `imdb`, `tvdb`, `anilist`.
+`isbn` is the Atlas crosswalk namespace of ISBNs (C15 2.5), keyed by the bare ISBN-13 of every edition and work: the plugin sends the ISBN-13
+(an ISBN-10 or a hyphenated ISBN is converted; an invalid one is not sent). When resolve matches nothing, a book's ISBN is also tried as
+`GET /games?q=<isbn>&type=book`, which client-api 1.0 defines to answer that book alone (`books/search-isbn.json`); only a single book answer
+is applied. A resolve `conflict` or `type_mismatch` is never overridden this way. The `tmdb`, `imdb`, `tvdb` and `anilist` names stay
+**provisional**: Atlas `a6bbc2a` has no provider that writes those namespaces, so such ids match nothing until one does. Atlas assigns by itself only for the reasons `id`, `redirect`,
 `crosswalk` and `exact`. **A title alone never applies a record**: a scan of an item with no known id gets nothing from this plugin. Use
 **Identify** on the item: the plugin searches Atlas (right media type only) and writes the Atlas id you pick, which later scans then use.
 

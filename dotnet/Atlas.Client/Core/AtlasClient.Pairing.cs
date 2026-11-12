@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -62,13 +63,53 @@ namespace Atlas.Client
         /// <summary>PairBody.label maxLength in the OpenAPI file; Atlas refuses longer labels (422).</summary>
         public const int MaxPairLabel = 64;
 
+        /// <summary>
+        /// The label as Atlas accepts it (PairBody: "Printable, at most 64 characters", checked with Python <c>str.isprintable</c>):
+        /// control, format, private-use, unassigned and lone surrogate characters are dropped, every other separator (tab, newline,
+        /// no-break space, ideographic space...) becomes one ASCII space, runs of spaces collapse, and the result is trimmed and cut
+        /// to <see cref="MaxPairLabel"/> UTF-16 units without splitting a surrogate pair (so never more than 64 code points).
+        /// A machine name such as "nas\u0007" or "Living\u00a0room" would otherwise be refused with 422.
+        /// </summary>
+        public static string PairLabel(string raw)
+        {
+            if (raw == null) return string.Empty;
+            var sb = new StringBuilder(raw.Length);
+            var space = false;
+            for (var i = 0; i < raw.Length; i++)
+            {
+                var c = raw[i];
+                var pair = char.IsHighSurrogate(c) && i + 1 < raw.Length && char.IsLowSurrogate(raw[i + 1]);
+                var cat = CharUnicodeInfo.GetUnicodeCategory(raw, i);
+                var drop = cat == UnicodeCategory.Control || cat == UnicodeCategory.Format || cat == UnicodeCategory.PrivateUse
+                           || cat == UnicodeCategory.OtherNotAssigned || cat == UnicodeCategory.Surrogate;
+                var sep = cat == UnicodeCategory.SpaceSeparator || cat == UnicodeCategory.LineSeparator
+                          || cat == UnicodeCategory.ParagraphSeparator || c == '\t' || c == '\n' || c == '\r';
+                if (sep)
+                {
+                    space = sb.Length > 0;
+                }
+                else if (!drop)
+                {
+                    if (space) sb.Append(' ');
+                    space = false;
+                    sb.Append(c);
+                    if (pair) sb.Append(raw[i + 1]);
+                }
+                if (pair) i++;
+            }
+            var label = sb.ToString();
+            if (label.Length > MaxPairLabel)
+                label = label.Substring(0, char.IsHighSurrogate(label[MaxPairLabel - 1]) ? MaxPairLabel - 1 : MaxPairLabel).TrimEnd(' ');
+            return label;
+        }
+
         /// <summary>Ask Atlas for a code. The pairing calls are never retried automatically: a lost answer must not open a second pairing.</summary>
         public async Task<PairingSession> StartPairingAsync(string clientLabel, CancellationToken ct = default(CancellationToken))
         {
             if (string.IsNullOrWhiteSpace(clientLabel)) throw new ArgumentException("A label such as \"Jellyfin on nas\" is required.", nameof(clientLabel));
             // PairBody has additionalProperties false: send `label` only (the host is already in the User-Agent).
-            var label = clientLabel.Trim();
-            if (label.Length > MaxPairLabel) label = label.Substring(0, char.IsHighSurrogate(label[MaxPairLabel - 1]) ? MaxPairLabel - 1 : MaxPairLabel);
+            var label = PairLabel(clientLabel);
+            if (label.Length == 0) throw new ArgumentException("The label has no printable characters.", nameof(clientLabel));
             var body = JsonNode.Object(new[] { new KeyValuePair<string, JsonNode>("label", JsonNode.Str(label)) });
             var reply = await SendAsync(new Req { Method = HttpMethod.Post, Path = "client/pair", Body = body, Auth = false }, ct).ConfigureAwait(false);
             var n = Parse(reply);

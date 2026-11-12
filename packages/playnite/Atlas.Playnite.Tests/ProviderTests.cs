@@ -107,6 +107,42 @@ namespace Atlas.Playnite.Tests
             Assert.Null(p.GetName(Args));
         }
 
+        [Fact]
+        public void A_merged_away_candidate_id_is_offered_as_its_survivor_and_only_once()
+        {
+            // Regression: candidates were matched with x.Id == id, so a merged-away id (answered by its survivor) was dropped and a
+            // lookup whose only candidate had been merged came back NotFound. Uses the recorded merge in batch-mixed.json.
+            const string merged = "atlas:01kdvdna84000000000000000t";           // lanternfall-duplicate, merged into RecordId
+            var h = TestAtlas.RecordHandler();
+            h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, "{\"results\":[{\"canonical_id\":null,\"reason\":\"ambiguous\",\"tier\":\"weak\","
+                + "\"method\":\"none\",\"confidence\":0.5,\"candidates\":[{\"id\":\"" + merged + "\",\"score\":0.6},{\"id\":\"" + TestAtlas.RecordId + "\",\"score\":0.5}]}]}"));
+            var redirected = Repo.Text("contract", "fixtures", "games", "record-redirected.json");
+            var batch = "{\"results\":[{\"requested\":\"" + merged + "\",\"status\":\"ok\",\"game\":" + redirected + "},"
+                        + "{\"requested\":\"" + TestAtlas.RecordId + "\",\"status\":\"ok\",\"game\":" + TestAtlas.Record + "}]}";
+            h.On("POST", "/api/v2/games/batch", s => FakeHandler.Json(200, batch));
+            IReadOnlyList<Candidate> shown = null;
+            var p = Provider(h, new Game("lanternfall") { PluginId = Guid.NewGuid(), GameId = "x" }, background: false, chooser: c => { shown = c; return c[0]; });
+
+            Assert.Equal(TestAtlas.Title, p.GetName(Args));
+            Assert.Equal(TestAtlas.RecordId, shown.Single().Id);
+        }
+
+        [Fact]
+        public void A_lone_merged_away_candidate_is_still_offered()
+        {
+            const string merged = "atlas:01kdvdna84000000000000000t";
+            var h = TestAtlas.RecordHandler();
+            h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, "{\"results\":[{\"canonical_id\":null,\"reason\":\"ambiguous\",\"tier\":\"weak\","
+                + "\"method\":\"none\",\"confidence\":0.5,\"candidates\":[{\"id\":\"" + merged + "\",\"score\":0.6}]}]}"));
+            // a survivor answered without redirected_from: only `requested` names the merged id
+            h.On("POST", "/api/v2/games/batch", s => FakeHandler.Json(200, "{\"results\":[{\"requested\":\"" + merged + "\",\"status\":\"ok\",\"game\":" + TestAtlas.Record + "}]}"));
+            var p = Provider(h, new Game("lanternfall") { PluginId = Guid.NewGuid(), GameId = "x" }, background: true);
+
+            Assert.Null(p.GetName(Args));
+            Assert.Equal(LookupOutcome.Candidates, p.Result.Outcome);
+            Assert.Equal(TestAtlas.RecordId, p.Result.Candidates.Single().Id);
+        }
+
         // Atlas answers reason "exact", assigned true, for an exact TITLE match (atlas/resolve.py title evidence). C15 8.4: a title
         // is never an automatic match, so a background download applies nothing, and a manual one offers that id to the user.
         private static string ExactTitleAnswer()

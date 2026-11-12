@@ -123,6 +123,33 @@ def test_playnite_vectors_agree_with_their_records():
         assert not set(case["expect"]) & set(case.get("expect_absent", [])), case["name"]
 
 
+def _vector_cases():
+    for name in ("playnite.json", "jellyfin.json"):
+        for case in json.loads((CONTRACT / "vectors" / name).read_text(encoding="utf-8"))["cases"]:
+            yield name, case
+
+
+def test_upstream_issue_markers_are_well_formed():
+    for name, case in _vector_cases():
+        marker = case.get("upstream_issue")
+        if marker is None:
+            continue
+        where = f"{name}: {case['name']}"
+        assert set(marker) == {"fields", "atlas_ref", "note"}, where
+        assert marker["fields"] and set(marker["fields"]) <= set(case["expect"]), where
+        assert len(marker["atlas_ref"]) == 40 and marker["note"].strip(), where
+
+
+def test_the_merge_survivor_title_is_marked_as_a_suspected_atlas_defect():
+    # The recorded survivor (lanternfall) carries the merged-away duplicate's title. A vector may pin it only while it says
+    # so, so a later Atlas fix that renames it back to "Lanternfall" is not read as a connector regression.
+    for name, case in _vector_cases():
+        record = _vector_record(case)
+        survivor_with_dup_title = "(duplicate entry)" in str(record.get("title")) and not record.get("redirected_from")
+        if survivor_with_dup_title and case.get("expect", {}).get("Name") == record["title"]:
+            assert "Name" in case.get("upstream_issue", {}).get("fields", []), f"{name}: {case['name']}"
+
+
 def test_vector_records_are_synthetic_and_contain_no_secrets():
     for path in (CONTRACT / "vectors" / "records").glob("*.json"):
         text = path.read_text(encoding="utf-8").lower()
@@ -218,9 +245,20 @@ def test_testkit_cli_seed_is_parsed():
     assert answer["ids"] == {"lanternfall": "atlas:1", "the-lamp-keeper": "atlas:2"} and answer["token"] == "t"
     pretty = kit.parse_cli_seed(json.dumps({"fixture": "connectors-v1", "created": False, "ids": {"a": "atlas:9"}}, indent=2))
     assert pretty["created"] is False
-    for bad in ("", "nothing here", '{"ids": {}}', '{"ids": {"a": 5}}'):
+    for bad in ("", "nothing here", '{"ids": {}}', '{"ids": {"a": 5}}', '{"level": "info"}\n{"ids": {}}\n'):
         with pytest.raises(kit.TestkitError):
             kit.parse_cli_seed(bad)
+
+
+def test_testkit_cli_seed_skips_a_json_log_line_after_the_answer():
+    # regression: the first JSON line without `ids` used to end the search with an error
+    out = ('{"fixture": "connectors-v1", "created": true, "ids": {"lanternfall": "atlas:1"}, "token": "secret-value"}\n'
+           '{"level": "info", "event": "seed done"}\n'
+           '{"ids": {"not": "an atlas id"}}\n')
+    assert kit.parse_cli_seed(out)["ids"] == {"lanternfall": "atlas:1"}
+    with pytest.raises(kit.TestkitError) as err:
+        kit.parse_cli_seed('{"token": "secret-value"}\n{"level": "info"}\n')
+    assert "secret-value" not in str(err.value)
 
 
 class _Done:

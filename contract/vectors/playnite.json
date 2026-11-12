@@ -6,6 +6,13 @@
     {
       "name": "day-precision release date keeps year, month and day (recorded record, merge survivor)",
       "record": "games/record-lanternfall.json",
+      "upstream_issue": {
+        "fields": [
+          "Name"
+        ],
+        "atlas_ref": "a6bbc2a7777090bcd1abe83b1aff135f078be466",
+        "note": "Suspected Atlas defect, not connector behaviour: after the connectors-v1 seed merges lanternfall-duplicate INTO lanternfall (atlas/client_seed.py), the survivor's view carries the merged-away duplicate's title and provider_ids (fixturegames LF-1001-DUP) instead of its own (Lanternfall, LF-1001). The connector maps whatever title Atlas sends. When Atlas fixes the survivor view and the fixture is re-recorded, update this expectation (expected: Lanternfall) and drop this marker; that change is not a connector regression."
+      },
       "expect": {
         "Name": "Lanternfall (duplicate entry)",
         "ReleaseDate": {

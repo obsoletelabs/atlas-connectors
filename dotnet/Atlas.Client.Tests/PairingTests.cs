@@ -265,4 +265,42 @@ public class PairingTests
         await rig.Client.StartPairingAsync(new string('L', 200));
         Assert.Equal(64, new SystemTextJsonAdapter().Parse(rig.Api.Single().Body)["label"].AsString().Length);
     }
+
+    [Theory]
+    [InlineData("nas\u0007", "nas")]                                    // a bell from a machine name
+    [InlineData("Living\u00a0room\tNAS", "Living room NAS")]            // no-break space and tab: not printable for Atlas
+    [InlineData("  a\r\n\r\nb  ", "a b")]
+    [InlineData("zero\u200bwidth\u202e", "zerowidth")]                  // format characters (Cf)
+    [InlineData("priv\ue000ate", "private")]                           // private use
+    [InlineData("Jellyfin \U0001F3AC", "Jellyfin \U0001F3AC")]          // an emoji is printable: kept, pair intact
+    public void Pair_labels_are_made_printable_before_they_are_sent(string raw, string expected)
+    {
+        Assert.Equal(expected, AtlasClient.PairLabel(raw));
+    }
+
+    [Fact]
+    public void A_lone_surrogate_is_dropped_from_a_pair_label()
+    {
+        Assert.Equal("lone surrogate", AtlasClient.PairLabel("lone " + (char)0xD800 + " surrogate"));
+        Assert.Equal("x", AtlasClient.PairLabel("x" + (char)0xDC00));
+    }
+
+    [Fact]
+    public async Task A_label_with_control_characters_is_cleaned_and_one_with_nothing_printable_is_refused()
+    {
+        using var rig = new Rig();
+        rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
+        await rig.Client.StartPairingAsync("Jellyfin on\u0000 nas\u001b[0m\n");
+        Assert.Equal("Jellyfin on nas[0m", new SystemTextJsonAdapter().Parse(rig.Api.Single().Body)["label"].AsString());
+        await Assert.ThrowsAsync<ArgumentException>(() => rig.Client.StartPairingAsync("\u0007\u200b"));
+        Assert.Single(rig.Api);                                         // nothing was sent for the refused label
+    }
+
+    [Fact]
+    public void A_long_label_never_splits_a_surrogate_pair_and_stays_within_64_code_points()
+    {
+        var label = AtlasClient.PairLabel(new string('a', 63) + "\U0001F3AC" + "tail");
+        Assert.Equal(63, label.Length);
+        Assert.False(char.IsHighSurrogate(label[label.Length - 1]));
+    }
 }

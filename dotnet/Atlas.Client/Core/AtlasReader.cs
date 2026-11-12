@@ -133,6 +133,9 @@ namespace Atlas.Client
         /// <c>POST /games/batch</c> (client-api 1.0): <c>{"results": [{"requested", "status": "ok" | "not_found", "game"}]}</c>, in
         /// request order. Only <c>ok</c> items with a record are returned; <c>not_found</c> and any status added later are skipped.
         /// A bare record in the list (a pre-release draft shape) is still read.
+        /// A merged-away id answers the survivor: when <c>requested</c> differs from the record's id and Atlas did not say
+        /// <c>redirected_from</c>, the requested id is put there, so a caller can always map an answer back with
+        /// <see cref="AtlasRecord.Answers"/>. Two requests that land on one survivor give two entries with the same id.
         /// </summary>
         public static IReadOnlyList<AtlasRecord> ReadBatch(JsonNode n)
         {
@@ -146,6 +149,10 @@ namespace Atlas.Client
                 {
                     if (status != "ok") continue;
                     r = ReadRecord(item["game"].Kind == JsonKind.Object ? item["game"] : item["record"]);
+                    var requested = item["requested"].AsString();
+                    if (r != null && !string.IsNullOrEmpty(requested) && string.IsNullOrEmpty(r.RedirectedFrom)
+                        && !string.Equals(requested, r.Id, StringComparison.Ordinal))
+                        r.RedirectedFrom = requested;
                 }
                 else r = ReadRecord(item);
                 if (r != null) list.Add(r);

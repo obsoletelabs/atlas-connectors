@@ -17,3 +17,4 @@ First version.
 - Reads only. Never writes to Atlas.
 - client-api 1.0 (Atlas A24): genres from `genres`, images by `primary_by_role`, batch answers in the `results`/`status`/`game` shape,
   the pairing link is `verify_url_complete`.
+- A candidate id that Atlas merged away is offered as its surviving record (once), instead of being dropped.
