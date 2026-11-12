@@ -58,9 +58,9 @@ jobs:
       - run: python -m pip install pytest
       - name: Offline tests (change detection, contract pins, testkit logic)
         run: python -m pytest tests -q
-      - name: Contract pins hold
+      - name: Contract pins hold, Atlas's own pins agree, no scaffold stand-in came back
         if: needs.gate.outputs.contract == 'true'
-        run: python tools/contract_pin.py check
+        run: python tools/contract_pin.py release-check
 
   # The shared C# client and its tests (no network: a fake HTTP handler over contract/fixtures). Also proves the
   # "compiled in as source" promise: a net462 library takes the sources with Newtonsoft only, at C# 7.3.
@@ -172,9 +172,10 @@ jobs:
     timeout-minutes: 25
     env:
       ATLAS_REPOSITORY: obsoletelabs/unnamed_tracking_metadata
-      # PLACEHOLDER pin: a branch name is not a pin. Replace with a commit SHA of the Atlas release that ships
-      # client_api (A24) and bump it deliberately. The resolve contract needs the programme line, not plain v2.
-      ATLAS_REF: ${{ inputs.atlas_ref || 'programme/p7-atlas-metrics' }}
+      # Pinned to the Atlas commit the contract files in contract/ were generated from (A24, programme branch
+      # programme/a24-client-api-v1, client-api 1.0: `client_api` in /site and `atlas seed --fixture connectors-v1`).
+      # Bump it deliberately, together with contract/, and to a release tag once Atlas tags one.
+      ATLAS_REF: ${{ inputs.atlas_ref || 'a6bbc2a7777090bcd1abe83b1aff135f078be466' }}
     steps:
       - uses: actions/checkout@v7
       - id: access
@@ -203,7 +204,7 @@ jobs:
           python-version: "3.12"
       - if: steps.access.outputs.available == 'true'
         run: python -m pip install pytest
-      - name: Build Atlas, start it, seed it, replay the resolve contract
+      - name: Build Atlas, start it, seed it (atlas seed + resolve seeds), replay the resolve contract and client-api calls
         if: steps.access.outputs.available == 'true'
         run: |
           python tools/atlas_testkit.py run --atlas-source .validation/atlas --tag atlas-testkit:ci \

@@ -6,7 +6,8 @@ namespace Atlas.Client.Tests;
 
 public class ClientTests
 {
-    private const string PortalId = "atlas:01m70bhdfwzc60xawvc1avtnv7";
+    private const string LanternfallId = "atlas:01kdvdna5a000000000000000h";
+    private const string LanternfallETag = "\"atlas:01kdvdna5a000000000000000h-5\"";   // MANIFEST.json
 
     // ---- request shape --------------------------------------------------------------------------------------
 
@@ -14,11 +15,11 @@ public class ClientTests
     public async Task Search_sends_identity_headers_and_never_puts_the_token_in_a_url(string adapter)
     {
         using var rig = new Rig(adapter);
-        rig.Handler.On("GET", "/api/v2/games", _ => Reply.Json(Fixtures.Text("fixtures/games/search-portal.json")));
+        rig.Handler.On("GET", "/api/v2/games", _ => Reply.Json(Fixtures.Text("fixtures/games/search-lanternfall.json")));
 
         var page = await rig.Client.SearchAsync("portal 2 & more", mediaType: "game", limit: 500, offset: 10, author: "herb");
 
-        Assert.Equal("Portal 2", Assert.Single(page.Results).Title);
+        Assert.Contains(page.Results, r => r.Id == LanternfallId);
         var req = rig.Api.Single();
         Assert.Equal("Bearer " + Rig.Token, req.Header("Authorization"));
         Assert.Equal("atlas-connector-jellyfin/1.2.3", req.Header("User-Agent"));
@@ -94,22 +95,37 @@ public class ClientTests
     public async Task Record_fetch_with_etag_then_304(string adapter)
     {
         using var rig = new Rig(adapter);
-        rig.Handler.Sequence("GET", "/api/v2/games/" + PortalId,
-            _ => Reply.Json(Fixtures.Text("fixtures/games/record-portal.json"), ("ETag", "\"" + PortalId + "-2\"")),
-            _ => Reply.Raw(304, null));
+        rig.Handler.Sequence("GET", "/api/v2/games/" + LanternfallId,
+            _ => Reply.Json(Fixtures.Text("fixtures/games/record-lanternfall.json"), ("ETag", LanternfallETag)),
+            _ => Reply.Raw(304, null, headers: ("ETag", LanternfallETag)));
 
-        var first = await rig.Client.GetRecordAsync(PortalId);
+        var first = await rig.Client.GetRecordAsync(LanternfallId);
         Assert.False(first.NotModified);
-        Assert.Equal("Portal 2", first.Record.Title);
-        Assert.Equal("\"" + PortalId + "-2\"", first.ETag);
+        Assert.Equal(LanternfallId, first.Record.Id);
+        Assert.Equal(5, first.Record.Version);                                     // ETag is "<id>-<version>"
+        Assert.Equal(LanternfallETag, first.ETag);
 
-        var second = await rig.Client.GetRecordAsync(PortalId, first.ETag);
+        var second = await rig.Client.GetRecordAsync(LanternfallId, first.ETag);
         Assert.True(second.NotModified);
         Assert.Null(second.Record);
         Assert.Equal(first.ETag, second.ETag);
         Assert.Null(rig.Api.First().Header("If-None-Match"));
         Assert.Equal(first.ETag, rig.Api.Last().Header("If-None-Match"));
-        Assert.EndsWith("/games/" + PortalId, Uri.UnescapeDataString(rig.Api.First().Uri.AbsolutePath));
+        Assert.EndsWith("/games/" + LanternfallId, Uri.UnescapeDataString(rig.Api.First().Uri.AbsolutePath));
+        Assert.All(rig.Api, r => Assert.Equal("Bearer " + Rig.Token, r.Header("Authorization")));   // a 304 needs the same token
+    }
+
+    [Fact]
+    public async Task A_recorded_merge_redirect_answers_the_survivor_and_its_etag()
+    {
+        using var rig = new Rig();
+        var duplicate = Fixtures.SeedId("lanternfall-duplicate");
+        rig.Handler.On("GET", "/api/v2/games/" + duplicate,
+            _ => Reply.Json(Fixtures.Text("fixtures/games/record-redirected.json"), ("ETag", LanternfallETag)));
+        var r = await rig.Client.GetRecordAsync(duplicate);
+        Assert.Equal(LanternfallId, r.Record.Id);
+        Assert.Equal(duplicate, r.Record.RedirectedFrom);
+        Assert.Equal(LanternfallETag, r.ETag);
     }
 
     [Fact]
@@ -142,7 +158,8 @@ public class ClientTests
         {
             var ids = new SystemTextJsonAdapter().Parse(r.Body)["ids"].Items;
             sizes.Add(ids.Count);
-            return Reply.Json("{\"results\":[" + string.Join(",", ids.Select(i => "{\"id\":\"" + i.AsString() + "\"}")) + "]}");
+            return Reply.Json("{\"results\":[" + string.Join(",", ids.Select(i =>
+                "{\"requested\":\"" + i.AsString() + "\",\"status\":\"ok\",\"game\":{\"id\":\"" + i.AsString() + "\"}}")) + "]}");
         });
         var ids = Enumerable.Range(0, 450).Select(i => "atlas:" + i).Concat(new[] { "atlas:1", "" }).ToList();   // duplicate and blank are dropped
         var records = await rig.Client.GetRecordsAsync(ids);
@@ -150,10 +167,24 @@ public class ClientTests
         Assert.Equal(450, records.Count);
     }
 
+    [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
+    public async Task The_recorded_batch_answer_skips_not_found_and_keeps_merge_redirects(string adapter)
+    {
+        using var rig = new Rig(adapter);                                          // the recorded /site lists `batch`
+        rig.Handler.On("POST", "/api/v2/games/batch", _ => Reply.Json(Fixtures.Body("fixtures/games/batch-mixed.json")));
+        var request = new SystemTextJsonAdapter().Parse(Fixtures.Request("fixtures/games/batch-mixed.json"));
+        var records = await rig.Client.GetRecordsAsync(request["ids"].Items.Select(i => i.AsString()));
+
+        Assert.Equal(new[] { LanternfallId, LanternfallId, Fixtures.SeedId("copper-tide") }, records.Select(r => r.Id));
+        Assert.Equal(Fixtures.SeedId("lanternfall-duplicate"), records[1].RedirectedFrom);
+        var sent = new SystemTextJsonAdapter().Parse(rig.Api.Single().Body);
+        Assert.True(Adapters.Same(request, sent), "the client should send the recorded request: " + rig.Api.Single().Body);
+    }
+
     [Fact]
     public async Task Without_the_batch_capability_it_falls_back_to_single_gets_and_skips_unknown_ids()
     {
-        using var rig = new Rig();
+        using var rig = new Rig(site: Rig.LegacySite);
         rig.Handler.On("GET", "/api/v2/games/atlas:a", _ => Reply.Json("{\"id\":\"atlas:a\"}"));
         var records = await rig.Client.GetRecordsAsync(new[] { "atlas:a", "atlas:missing" });
         Assert.Equal("atlas:a", Assert.Single(records).Id);
@@ -217,10 +248,24 @@ public class ClientTests
     public async Task Resolve_fixture_round_trip_through_the_client()
     {
         using var rig = new Rig();
-        rig.Handler.On("POST", "/api/v2/resolve", _ => Reply.Json(Fixtures.Text("fixtures/games/resolve-by-atlas-id.json")));
-        var r = Assert.Single(await rig.Client.ResolveAsync(new[] { new ResolveItem { ProviderIds = new Dictionary<string, string> { ["atlas"] = PortalId } } }));
-        Assert.True(r.CanAutoAssign);
-        Assert.Equal(PortalId, r.CanonicalId);
+        rig.Handler.On("POST", "/api/v2/resolve", _ => Reply.Json(Fixtures.Body("fixtures/games/resolve-by-ids.json")));
+        var items = new[]
+        {
+            new ResolveItem { MediaType = "game", ProviderIds = new Dictionary<string, string> { ["fixturegames"] = "LF-1001" } },
+            new ResolveItem { ProviderIds = new Dictionary<string, string> { ["atlas"] = Fixtures.SeedId("lanternfall-duplicate") } },
+            new ResolveItem { MediaType = "book", ProviderIds = new Dictionary<string, string> { ["fixturebooks"] = "LK-0001" } },
+            new ResolveItem { MediaType = "game", Title = "Quiet Orbit" },
+            new ResolveItem { ProviderIds = new Dictionary<string, string> { ["fixturegames"] = "NOPE-0000" } },
+        };
+        var results = await rig.Client.ResolveAsync(items, includeView: true);
+        Assert.Equal(new[] { true, true, true, false, false }, results.Select(r => r.CanAutoAssign));
+        Assert.Equal(LanternfallId, results[0].CanonicalId);
+        Assert.Equal(LanternfallId, results[1].CanonicalId);
+
+        // what the client sends is what Atlas was recorded answering (plus include_view)
+        var sent = new SystemTextJsonAdapter().Parse(rig.Api.Single().Body);
+        var recorded = new SystemTextJsonAdapter().Parse(Fixtures.Request("fixtures/games/resolve-by-ids.json"));
+        Assert.True(Adapters.Same(recorded["items"], sent["items"]), rig.Api.Single().Body);
     }
 
     // ---- retry / backoff / rate limit -----------------------------------------------------------------------
@@ -423,12 +468,17 @@ public class ClientTests
     [Fact]
     public async Task An_atlas_without_client_api_works_by_default_and_is_refused_when_required()
     {
-        using (var lenient = new Rig())
+        using (var lenient = new Rig(site: Rig.LegacySite))
         {
             lenient.Handler.On("GET", "/api/v2/games", _ => Reply.Json("{\"results\":[]}"));
-            await lenient.Client.SearchAsync("a");                              // today's Atlas (fixtures/games/site.json has no client_api)
+            await lenient.Client.SearchAsync("a");                              // an Atlas from before client-api 1.0
         }
-        using var strict = new Rig(configure: o => o.RequireClientApi = true);
+        using (var current = new Rig(configure: o => o.RequireClientApi = true))
+        {
+            current.Handler.On("GET", "/api/v2/games", _ => Reply.Json("{\"results\":[]}"));
+            await current.Client.SearchAsync("a");                              // the recorded /site offers client_api 1.0
+        }
+        using var strict = new Rig(configure: o => o.RequireClientApi = true, site: Rig.LegacySite);
         var e = await Assert.ThrowsAsync<AtlasIncompatibleException>(() => strict.Client.SearchAsync("a"));
         Assert.Contains("client_api", e.Message);
     }
@@ -436,7 +486,7 @@ public class ClientTests
     [Fact]
     public async Task A_required_capability_on_an_atlas_that_cannot_say_is_refused()
     {
-        using var rig = new Rig(configure: o => o.RequiredCapabilities.Add("books"));
+        using var rig = new Rig(configure: o => o.RequiredCapabilities.Add("books"), site: Rig.LegacySite);
         await Assert.ThrowsAsync<AtlasIncompatibleException>(() => rig.Client.SearchAsync("a"));
     }
 
@@ -446,9 +496,11 @@ public class ClientTests
     public async Task Relations_and_artwork_endpoints()
     {
         using var rig = new Rig();
-        rig.Handler.On("GET", "/api/v2/games/" + PortalId + "/relations", _ => Reply.Json(Fixtures.Text("fixtures/games/relations-portal.json")));
-        rig.Handler.On("GET", "/api/v2/games/" + PortalId + "/artwork", _ => Reply.Json("{\"id\":\"" + PortalId + "\",\"results\":[{\"id\":\"1\",\"kind\":\"cover\"}]}"));
-        Assert.Single((await rig.Client.GetRelationsAsync(PortalId)).Nodes);
-        Assert.Equal("cover", Assert.Single((await rig.Client.GetArtworkAsync(PortalId)).Items).Kind);
+        rig.Handler.On("GET", "/api/v2/games/" + LanternfallId + "/relations", _ => Reply.Json(Fixtures.Text("fixtures/games/relations-lanternfall.json")));
+        rig.Handler.On("GET", "/api/v2/games/" + LanternfallId + "/artwork", _ => Reply.Json(Fixtures.Text("fixtures/games/artwork-lanternfall.json")));
+        Assert.Single((await rig.Client.GetRelationsAsync(LanternfallId)).Nodes);
+        var art = await rig.Client.GetArtworkAsync(LanternfallId);
+        Assert.Equal(4, art.Items.Count);
+        Assert.Equal("key_art", art.Items.Single(a => a.Id == art.PrimaryByRole["cover"]).Kind);
     }
 }

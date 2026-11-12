@@ -113,7 +113,7 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public async System.Threading.Tasks.Task Test_connection_reports_the_site_and_never_changes_settings()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             var list = new List<AtlasSettings>();
             var svc = new AtlasServices(new AtlasSettings(), new ReverseProtector(), _dir, () => h);
             var vm = new AtlasSettingsViewModel(svc, s => list.Add(s));

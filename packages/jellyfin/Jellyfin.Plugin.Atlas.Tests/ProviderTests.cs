@@ -28,14 +28,15 @@ public class ProviderTests
         using var h = new Harness(Harness.BookHandler());
         var p = new AtlasBookProvider(() => h.Runtime);
 
-        var r = await p.GetMetadata(Info("some file name", ("Isbn", "9780000000002")), default);
+        var r = await p.GetMetadata(Info("some file name", ("Isbn", Harness.BookIsbn)), default);
 
         Assert.True(r.HasMetadata);
-        Assert.Equal("The Synthetic Lighthouse", r.Item.Name);
+        Assert.Equal(Harness.BookTitle, r.Item.Name);
+        Assert.Equal(Harness.BookIsbn, r.Item.ProviderIds["Isbn"]);
         Assert.Equal(Harness.BookId, r.Item.ProviderIds["Atlas"]);
         var resolve = h.Handler.Requests.Single(x => x.Uri.AbsolutePath.EndsWith("/resolve"));
         Assert.Contains("\"isbn\"", resolve.Body);
-        Assert.Contains("9780000000002", resolve.Body);
+        Assert.Contains(Harness.BookIsbn, resolve.Body);
         Assert.Equal("Bearer " + Harness.Token, resolve.Header("Authorization"));
         Assert.StartsWith("atlas-connector-jellyfin/", resolve.Header("User-Agent"));
         Assert.All(h.Handler.Requests, x => Assert.DoesNotContain(Harness.Token, x.Uri.ToString()));
@@ -47,7 +48,7 @@ public class ProviderTests
         var handler = Harness.BookHandler();
         using var h = new Harness(handler);
 
-        var r = await new AtlasBookProvider(() => h.Runtime).GetMetadata(Info("The Synthetic Lighthouse"), default);
+        var r = await new AtlasBookProvider(() => h.Runtime).GetMetadata(Info(Harness.BookTitle), default);
 
         Assert.False(r.HasMetadata);
         Assert.DoesNotContain(handler.Requests, x => x.Uri.AbsolutePath.EndsWith("/resolve"));
@@ -62,7 +63,7 @@ public class ProviderTests
         handler.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, "{\"results\":[{\"assigned\":true,\"canonical_id\":\"" + Harness.BookId + "\",\"reason\":\"exact\",\"method\":\"exact\",\"record\":" + Harness.Book + "}]}"));
         using var h = new Harness(handler);
 
-        var r = await new AtlasBookProvider(() => h.Runtime).GetMetadata(Info("The Synthetic Lighthouse", ("Isbn", "9780000000019")), default);
+        var r = await new AtlasBookProvider(() => h.Runtime).GetMetadata(Info(Harness.BookTitle, ("Isbn", "9780000000101")), default);
 
         Assert.False(r.HasMetadata);
         Assert.Contains(handler.Requests, x => x.Uri.AbsolutePath.EndsWith("/resolve"));
@@ -141,7 +142,7 @@ public class ProviderTests
         var offline = await p.GetMetadata(Info("x", ("Atlas", Harness.BookId)), default);
 
         Assert.True(offline.HasMetadata);
-        Assert.Equal("The Synthetic Lighthouse", offline.Item.Name);
+        Assert.Equal(Harness.BookTitle, offline.Item.Name);
     }
 
     [Fact]
@@ -157,11 +158,11 @@ public class ProviderTests
     public async Task Search_returns_only_the_right_media_type_with_atlas_ids()
     {
         var handler = Harness.BookHandler();
-        handler.On("GET", "/api/v2/games", s => FakeHandler.Json(200, Repo.Text("contract", "fixtures", "books", "search-lighthouse.json")));
+        handler.On("GET", "/api/v2/games", s => FakeHandler.Json(200, Repo.Text("contract", "fixtures", "books", "search-author.json")));
         using var h = new Harness(handler);
 
-        var found = (await new AtlasBookProvider(() => h.Runtime).GetSearchResults(Info("lighthouse"), default)).ToList();
-        var asMovies = (await new AtlasMovieProvider(() => h.Runtime).GetSearchResults(new MovieInfo { Name = "lighthouse" }, default)).ToList();
+        var found = (await new AtlasBookProvider(() => h.Runtime).GetSearchResults(Info("quillfeather"), default)).ToList();
+        var asMovies = (await new AtlasMovieProvider(() => h.Runtime).GetSearchResults(new MovieInfo { Name = "quillfeather" }, default)).ToList();
 
         Assert.NotEmpty(found);
         Assert.All(found, f => Assert.StartsWith("atlas:", f.ProviderIds["Atlas"]));

@@ -86,11 +86,23 @@ namespace Atlas.Client
     {
         public string Name { get; set; }
         public string Id { get; set; }
+        /// <summary>The creator role as Atlas sends it (<c>author</c>, <c>translator</c>, <c>narrator</c>, ...); null when Atlas did
+        /// not say, which means author. A role this client does not know is kept as text.</summary>
+        public string Role { get; set; }
+        /// <summary>True for <c>author</c> or no role: the people who wrote the work (not translators, narrators, editors).</summary>
+        public bool IsAuthor => Role == null || string.Equals(Role, "author", StringComparison.Ordinal);
     }
 
     public sealed class Edition
     {
         public string Name { get; set; }
+        /// <summary>The <c>book_format</c> word (<c>paperback</c>, <c>hardcover</c>, <c>ebook</c>, ...); unknown words are kept as text.</summary>
+        public string Format { get; set; }
+        public string Isbn13 { get; set; }
+        public string Isbn10 { get; set; }
+        public string Language { get; set; }
+        public string Publisher { get; set; }
+        public PartialDate? Published { get; set; }
         public IReadOnlyDictionary<string, string> ProviderIds { get; set; } = EmptyMap.Instance;
     }
 
@@ -99,6 +111,8 @@ namespace Atlas.Client
         public string Name { get; set; }
         /// <summary>Kept as text: positions can be "2", "2.5" or "I".</summary>
         public string Position { get; set; }
+        /// <summary>The Atlas id of the series record when Atlas names it (relations); null otherwise.</summary>
+        public string Id { get; set; }
     }
 
     /// <summary>One Atlas record (a game or a book or anything Atlas adds later). Fields a media type does not have are null or empty.</summary>
@@ -113,9 +127,22 @@ namespace Atlas.Client
         public string Developer { get; set; }
         public string Publisher { get; set; }
         public IReadOnlyList<Author> Authors { get; set; } = Array.Empty<Author>();
+        /// <summary>Topic words: <c>subjects</c>, else <c>genres</c>, else (books) <c>features</c>, where Atlas keeps Open Library subjects.</summary>
         public IReadOnlyList<string> Subjects { get; set; } = Array.Empty<string>();
         public IReadOnlyList<Edition> Editions { get; set; } = Array.Empty<Edition>();
+        /// <summary>From <c>series</c> or <c>facts.series</c>, else the first <c>relations.members_of</c> entry of type <c>series_member</c>.</summary>
         public SeriesInfo Series { get; set; }
+        /// <summary>The first ISBN-13 Atlas knows: <c>provider_ids.isbn</c>, else the first edition's <c>isbn_13</c>. Null for non-books.</summary>
+        public string Isbn
+        {
+            get
+            {
+                string v;
+                if (ProviderIds.TryGetValue("isbn", out v) && !string.IsNullOrWhiteSpace(v)) return v.Trim();
+                foreach (var e in Editions) if (!string.IsNullOrWhiteSpace(e.Isbn13)) return e.Isbn13.Trim();
+                return null;
+            }
+        }
         /// <summary>The first release at the precision Atlas can prove; null when Atlas has no date.</summary>
         public PartialDate? FirstRelease { get; set; }
         public IReadOnlyDictionary<string, string> ProviderIds { get; set; } = EmptyMap.Instance;
