@@ -61,7 +61,13 @@ public sealed class LookupResult
 /// </summary>
 public sealed class AtlasLookup
 {
-    /// <summary>Jellyfin provider id key to the Atlas <c>provider_ids</c> namespace. PROVISIONAL: the namespaces are not confirmed against a live Atlas.</summary>
+    /// <summary>
+    /// Jellyfin provider id key to the Atlas <c>provider_ids</c> namespace sent to <c>/resolve</c>. <c>isbn</c> is the Atlas crosswalk
+    /// namespace of ISBN-13s (C15 §2.5, Atlas <c>books.ISBN_NAMESPACE</c>): it covers edition ISBNs and work keys alike, but only as a bare
+    /// ISBN-13, so the ISBN is normalised first (<see cref="IsbnText.ToIsbn13"/>). When resolve matches nothing, a book's ISBN is also tried
+    /// as <c>GET /games?q=&lt;isbn&gt;&amp;type=book</c>, which the client-api 1.0 OpenAPI defines to answer that book alone.
+    /// <c>tmdb</c>, <c>imdb</c>, <c>tvdb</c> and <c>anilist</c> are still PROVISIONAL: Atlas a6bbc2a has no provider writing those namespaces.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> Namespaces = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         { "Isbn", "isbn" },
@@ -70,6 +76,8 @@ public sealed class AtlasLookup
         { "Tvdb", "tvdb" },
         { "AniList", "anilist" },
     };
+
+    public const string IsbnNamespace = "isbn";
 
     private readonly AtlasClient _client;
     private readonly RecordCache _cache;
@@ -123,10 +131,24 @@ public sealed class AtlasLookup
 
         foreach (var kv in ids)
         {
-            if (!string.IsNullOrWhiteSpace(kv.Value) && Namespaces.TryGetValue(kv.Key, out var ns))
+            if (string.IsNullOrWhiteSpace(kv.Value) || !Namespaces.TryGetValue(kv.Key, out var ns))
             {
-                map[ns] = kv.Value.Trim();
+                continue;
             }
+
+            if (ns == IsbnNamespace)
+            {
+                // Atlas keys ISBNs as bare ISBN-13s: "0-00-000010-8" would never match, and an invalid ISBN is no identity at all
+                var isbn = IsbnText.ToIsbn13(kv.Value);
+                if (isbn != null)
+                {
+                    map[ns] = isbn;
+                }
+
+                continue;
+            }
+
+            map[ns] = kv.Value.Trim();
         }
 
         return map;
@@ -203,6 +225,12 @@ public sealed class AtlasLookup
                 }
 
                 found.AddRange(r.Candidates);
+            }
+
+            if (q.Kind == ItemKind.Book && ids.TryGetValue(IsbnNamespace, out var isbn))
+            {
+                var hit = await _client.SearchAsync(isbn, "book", 2, 0, ct: ct).ConfigureAwait(false);
+                found.AddRange(hit.Results);
             }
 
             if (!string.IsNullOrWhiteSpace(q.Name))
@@ -311,13 +339,47 @@ public sealed class AtlasLookup
         var cand = a.Candidates.Where(c => !string.IsNullOrEmpty(c.Id)).Select(c => c.Id).Distinct().Take(5).ToList();
         if (cand.Count == 0)
         {
+            // Nothing matched at all (not a conflict, not another type): a book's ISBN still names its work through the search
+            if (string.IsNullOrEmpty(a.Reason) || a.Reason == "none")
+            {
+                var byIsbn = await IsbnSearchAsync(q, ids, ct).ConfigureAwait(false);
+                if (byIsbn != null)
+                {
+                    return byIsbn;
+                }
+            }
+
             return new LookupResult { Outcome = LookupOutcome.NotFound };
         }
 
-        var records = (await _client.GetRecordsAsync(cand, ct).ConfigureAwait(false)).Where(r => Accepts(q.Kind, r.MediaTypeKind)).ToList();
+        // One survivor can answer several candidate ids (merges): list it once
+        var records = (await _client.GetRecordsAsync(cand, ct).ConfigureAwait(false)).Where(r => Accepts(q.Kind, r.MediaTypeKind))
+            .GroupBy(r => r.Id, StringComparer.Ordinal).Select(g => g.First()).ToList();
         return records.Count == 0
             ? new LookupResult { Outcome = LookupOutcome.NotFound }
             : new LookupResult { Outcome = LookupOutcome.Candidates, Candidates = records };
+    }
+
+    /// <summary>
+    /// <c>GET /games?q=&lt;ISBN-13&gt;&amp;type=book</c>: Atlas answers the one work that edition belongs to, or nothing (OpenAPI <c>q</c>;
+    /// fixture <c>books/search-isbn.json</c>). An ISBN is identity evidence, so a single book answer is a match. Anything else is not.
+    /// </summary>
+    private async Task<LookupResult> IsbnSearchAsync(ItemQuery q, Dictionary<string, string> ids, CancellationToken ct)
+    {
+        if (q.Kind != ItemKind.Book || !ids.TryGetValue(IsbnNamespace, out var isbn))
+        {
+            return null;
+        }
+
+        var page = await _client.SearchAsync(isbn, "book", 2, 0, ct: ct).ConfigureAwait(false);
+        var books = page.Results.Where(r => !string.IsNullOrEmpty(r.Id) && Accepts(q.Kind, r.MediaTypeKind)).ToList();
+        if (books.Count != 1)
+        {
+            return null;
+        }
+
+        _cache.PutRecord(books[0], null);
+        return new LookupResult { Outcome = LookupOutcome.Found, Record = books[0] };
     }
 
     private static bool IsOutage(Exception e)

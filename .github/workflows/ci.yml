@@ -58,9 +58,9 @@ jobs:
       - run: python -m pip install pytest
       - name: Offline tests (change detection, contract pins, testkit logic)
         run: python -m pytest tests -q
-      - name: Contract pins hold
+      - name: Contract pins hold, Atlas's own pins agree, no scaffold stand-in came back
         if: needs.gate.outputs.contract == 'true'
-        run: python tools/contract_pin.py check
+        run: python tools/contract_pin.py release-check
 
   # The shared C# client and its tests (no network: a fake HTTP handler over contract/fixtures). Also proves the
   # "compiled in as source" promise: a net462 library takes the sources with Newtonsoft only, at C# 7.3.
@@ -161,10 +161,9 @@ jobs:
           if-no-files-found: ignore
 
   # The live lane: a REAL Atlas, seeded with synthetic data, and the replay of the resolve contract against it.
-  # Atlas is private, so the source is fetched with ATLAS_CHECKOUT_TOKEN (read-only contents on the Atlas repository)
-  # exactly as the plugins repository does. Without the secret the lane is SKIPPED LOUDLY (warning + summary); once
-  # the secret exists any failure fails the job. Fork pull requests have no secrets and skip it. Once Atlas publishes
-  # a container image, replace the build with a pinned image digest and drop the secret (decision D15.19).
+  # The Atlas repository is public, so its source is fetched with a plain checkout: no secret is needed. Fork pull
+  # requests are skipped (they are untrusted and the lane builds and runs Atlas). Once Atlas publishes a container
+  # image, replace the build with a pinned image digest (decision D15.19).
   live-atlas:
     needs: gate
     if: needs.gate.outputs.live == 'true' && github.event.pull_request.head.repo.fork != true
@@ -172,50 +171,35 @@ jobs:
     timeout-minutes: 25
     env:
       ATLAS_REPOSITORY: obsoletelabs/unnamed_tracking_metadata
-      # PLACEHOLDER pin: a branch name is not a pin. Replace with a commit SHA of the Atlas release that ships
-      # client_api (A24) and bump it deliberately. The resolve contract needs the programme line, not plain v2.
-      ATLAS_REF: ${{ inputs.atlas_ref || 'programme/p7-atlas-metrics' }}
+      # Pinned to the Atlas commit the contract files in contract/ were generated from (A24, programme branch
+      # programme/a24-client-api-v1, client-api 1.0: `client_api` in /site and `atlas seed --fixture connectors-v1`).
+      # Bump it deliberately, together with contract/, and to a release tag once Atlas tags one (version-unification PR).
+      ATLAS_REF: ${{ inputs.atlas_ref || 'a6bbc2a7777090bcd1abe83b1aff135f078be466' }}
     steps:
       - uses: actions/checkout@v7
-      - id: access
-        env:
-          ATLAS_TOKEN: ${{ secrets.ATLAS_CHECKOUT_TOKEN }}
-        run: |
-          if [ -z "$ATLAS_TOKEN" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Secret ATLAS_CHECKOUT_TOKEN is not configured, so the live Atlas lane was SKIPPED."
-            echo "### Live Atlas lane skipped" >> "$GITHUB_STEP_SUMMARY"
-            echo "Add the \`ATLAS_CHECKOUT_TOKEN\` secret (read-only contents on \`$ATLAS_REPOSITORY\`) to enable it." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/checkout@v7
-        if: steps.access.outputs.available == 'true'
         with:
           repository: ${{ env.ATLAS_REPOSITORY }}
           ref: ${{ env.ATLAS_REF }}
-          token: ${{ secrets.ATLAS_CHECKOUT_TOKEN }}
           path: .validation/atlas
           persist-credentials: false
       - uses: actions/setup-python@v6
-        if: steps.access.outputs.available == 'true'
         with:
           python-version: "3.12"
-      - if: steps.access.outputs.available == 'true'
-        run: python -m pip install pytest
-      - name: Build Atlas, start it, seed it, replay the resolve contract
-        if: steps.access.outputs.available == 'true'
+      - run: python -m pip install pytest
+      - name: Build Atlas, start it, seed it (atlas seed + resolve seeds), replay the resolve contract and client-api calls
         run: |
-          python tools/atlas_testkit.py run --atlas-source .validation/atlas --tag atlas-testkit:ci \
-            -- python -m pytest tests/live -q
+          python tools/atlas_testkit.py run --atlas-source .validation/atlas --tag atlas-testkit:ci             -- python -m pytest tests/live -q
 
-  # The single required status. A job may be skipped only when the gate did not select it.
+  # The single required status. A job may be skipped only when the gate did not select it. A live lane that was selected
+  # but could not run (no secret) does not fail this check, but it is never reported as a pass: the log, a warning
+  # annotation and the job summary all say "passed WITHOUT the live Atlas lane".
   required:
     needs: [gate, python, dotnet, package-playnite, package-jellyfin, live-atlas]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Every selected job passed (a skipped live lane only warns)
+      - name: Every selected job passed (a live lane that could not run is reported, not passed)
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
@@ -224,5 +208,13 @@ jobs:
           needs = json.loads(os.environ["RESULTS"])
           bad = {k: v["result"] for k, v in needs.items() if v["result"] in {"failure", "cancelled"}}
           print({k: v["result"] for k, v in needs.items()})
+          selected = needs["gate"].get("outputs", {}).get("live") == "true"
+          ran = needs["live-atlas"]["result"] == "success"
+          if selected and not ran and not bad:
+              note = "required passed WITHOUT the live Atlas lane (live-atlas: %s)" % needs["live-atlas"]["result"]
+              print("::warning::" + note)
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+                  out.write("### " + note + "\n\nNo end-to-end check against a real Atlas ran for this commit. "
+                            "Do not treat this run as live-verified.\n")
           sys.exit(1 if bad else 0)
           PY

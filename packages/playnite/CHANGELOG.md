@@ -15,3 +15,6 @@ First version.
   The token is stored with Windows DPAPI (current user), not in clear text.
 - Offline: a cached record is used for up to 7 days when Atlas cannot be reached.
 - Reads only. Never writes to Atlas.
+- client-api 1.0 (Atlas A24): genres from `genres`, images by `primary_by_role`, batch answers in the `results`/`status`/`game` shape,
+  the pairing link is `verify_url_complete`.
+- A candidate id that Atlas merged away is offered as its surviving record (once), instead of being dropped.

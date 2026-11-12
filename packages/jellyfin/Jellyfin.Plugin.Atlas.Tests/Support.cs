@@ -121,7 +121,11 @@ public sealed class Harness : IDisposable
 {
     public const string BaseUrl = "https://atlas.example.org/";
     public const string Token = "tok-synthetic-0000";
-    public const string BookId = "atlas:00000000000000000000000001";
+    public const string BookId = "atlas:01kdvdna9c000000000000000y";   // the-lamp-keeper in contract/fixtures/MANIFEST.json
+
+    public const string BookTitle = "The Lamp Keeper";
+
+    public const string BookIsbn = "9780000000118";                   // its first edition (hardcover)
 
     public Harness(FakeHandler handler, PluginConfiguration config = null, bool withToken = true)
     {
@@ -153,7 +157,7 @@ public sealed class Harness : IDisposable
 
     public static string Site => Repo.Text("contract", "fixtures", "games", "site.json");
 
-    public static string Book => Repo.Text("contract", "fixtures", "books", "record-synthetic-lighthouse.json");
+    public static string Book => Repo.Text("contract", "fixtures", "books", "record-the-lamp-keeper.json");
 
     /// <summary>Serves /site, one book by id (with an ETag), and /resolve answering "id" for the book.</summary>
     public static FakeHandler BookHandler()

@@ -24,6 +24,34 @@ public static class Fixtures
     /// <summary>Text of a file under contract/ (for example "fixtures/games/site.json").</summary>
     public static string Text(string relative) => File.ReadAllText(Path.Combine(Root, "contract", relative));
 
+    /// <summary>
+    /// The answer body a fixture records. GET answers are stored as the bare body; POST answers (batch, resolve, pairing) as
+    /// <c>{"request": ..., "response": ...}</c> (Atlas tools/export_client_fixtures.py), so this returns <c>response</c> then.
+    /// </summary>
+    public static string Body(string relative) => Part(relative, "response");
+
+    /// <summary>The request a POST fixture was recorded with.</summary>
+    public static string Request(string relative) => Part(relative, "request");
+
+    private static string Part(string relative, string member)
+    {
+        var text = Text(relative);
+        using var doc = System.Text.Json.JsonDocument.Parse(text);
+        var root = doc.RootElement;
+        if (root.ValueKind == System.Text.Json.JsonValueKind.Object && root.TryGetProperty("request", out _)
+            && root.TryGetProperty("response", out _))
+            return root.GetProperty(member).GetRawText();
+        if (member == "request") throw new InvalidOperationException(relative + " records no request");
+        return text;
+    }
+
+    /// <summary>MANIFEST.json's seed name -> Atlas id map (the synthetic connectors-v1 catalogue).</summary>
+    public static string SeedId(string name)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(Text("fixtures/MANIFEST.json"));
+        return doc.RootElement.GetProperty("seed_ids").GetProperty(name).GetString();
+    }
+
     public static IEnumerable<string> AllJson() =>
         Directory.EnumerateFiles(Path.Combine(Root, "contract", "fixtures"), "*.json", SearchOption.AllDirectories)
             .Where(p => !p.EndsWith("resolve-contract-v1.json", StringComparison.Ordinal))   // a case list, not a record
@@ -168,9 +196,15 @@ public sealed class Rig : IDisposable
 
     public void Dispose() => Client.Dispose();
 
+    /// <summary>The recorded /site with its client_api replaced (or removed, for null).</summary>
     public static string SiteWith(string clientApiJson)
     {
-        var s = Fixtures.Text("fixtures/games/site.json").TrimEnd();
-        return s.Substring(0, s.LastIndexOf('}')).TrimEnd() + ",\n \"client_api\": " + clientApiJson + "\n}";
+        var site = System.Text.Json.Nodes.JsonNode.Parse(Fixtures.Text("fixtures/games/site.json")).AsObject();
+        site.Remove("client_api");
+        if (clientApiJson != null) site["client_api"] = System.Text.Json.Nodes.JsonNode.Parse(clientApiJson);
+        return site.ToJsonString();
     }
+
+    /// <summary>An Atlas from before client-api 1.0: the recorded /site without client_api.</summary>
+    public static string LegacySite => SiteWith(null);
 }

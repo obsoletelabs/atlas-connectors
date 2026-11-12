@@ -41,7 +41,7 @@ It only reads. It never writes to Atlas.
 | Genres, Tags | subjects | first 10 genres, the rest tags (decision D15.12) |
 | Description | description | when Atlas has one |
 | Links | an **Atlas** link | also how the connector remembers the Atlas id (Playnite has no hidden custom field) |
-| Cover, Background, Icon | artwork | Atlas's `primary` per role, else the one marked preferred, else the first of that kind. An unknown kind is never guessed into a role |
+| Cover, Background, Icon | artwork | Atlas's `primary_by_role`, else the one marked preferred, else the first of that kind. An unknown kind is never guessed into a role |
 
 Expected values for 9 records are in `contract/vectors/playnite.json` and are run by the unit tests.
 
@@ -88,8 +88,9 @@ python -m pytest tests/test_playnite_package.py
 
 - Not run inside a real Playnite. There is no headless Playnite, so the plugin class itself (`GetSettings`, `GetSettingsView`, the manual
   picker dialog) was compiled but not exercised; the provider is driven the way Playnite drives it, with a fake HTTP handler.
-- The pairing endpoints are provisional until Atlas PR A24 (`docs/CLIENT-NOTES.md`). Pairing is tested in the shared client, not
-  end to end against an Atlas, and not through the settings view model.
-- No QR code is drawn; the settings show the code and the address (the QR in the design is rendered by Atlas).
+- Pairing follows client-api 1.0 (`contract/openapi-client-v1.json`, `fixtures/pairing`). It is tested in the shared client and on the
+  live lane against a real Atlas, not through the settings view model.
+- No QR code is drawn; the settings show the code and `verify_url_complete` (the approval page with the code filled in). Atlas sends
+  `qr_svg`, which the shared client exposes as `PairingSession.QrSvg`.
 - The `.pext` was packed by `pack.py`, not by Playnite's Toolbox, and has not been installed into Playnite.
 - Add-on database listing is not automated: submissions are on hold (`docs/VENDOR-FACTS.md`).

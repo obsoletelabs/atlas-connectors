@@ -46,7 +46,7 @@ namespace Atlas.Client
                 Description = n["description"].AsString() ?? facts["description"].AsString(),
                 Developer = FirstString(n["developer"]) ?? FirstString(facts["developer"]),
                 Publisher = FirstString(n["publisher"]) ?? FirstString(facts["publisher"]),
-                Subjects = Strings(n["subjects"]),
+                Subjects = Topics(n),
                 ProviderIds = StringMap(n["provider_ids"]),
                 Sources = Strings(n["sources"]),
                 RedirectedFrom = n["redirected_from"].AsString(),
@@ -60,7 +60,7 @@ namespace Atlas.Client
             {
                 if (a.Kind == JsonKind.String) authors.Add(new Author { Name = a.AsString() });
                 else if (a.Kind == JsonKind.Object && a["name"].AsString() != null)
-                    authors.Add(new Author { Name = a["name"].AsString(), Id = a["id"].AsString() });
+                    authors.Add(new Author { Name = a["name"].AsString(), Id = a["id"].AsString(), Role = a["role"].AsString() });
             }
             rec.Authors = authors;
 
@@ -69,6 +69,18 @@ namespace Atlas.Client
             var series = n["series"].Kind == JsonKind.Object ? n["series"] : facts["series"];
             if (series.Kind == JsonKind.Object)
                 rec.Series = new SeriesInfo { Name = series["name"].AsString(), Position = Text(series["position"]) };
+            else
+            {
+                // client-api 1.0: a book's series is a relation (members_of, type series_member), with the position on the edge
+                foreach (var m in n["relations"]["members_of"].Items)
+                {
+                    if (m.Kind != JsonKind.Object || m["title"].AsString() == null) continue;
+                    var type = m["type"].AsString();
+                    if (type != null ? type != "series_member" : m["media_type"].AsString() != "series") continue;
+                    rec.Series = new SeriesInfo { Name = m["title"].AsString(), Position = Text(m["position"]), Id = m["id"].AsString() };
+                    break;
+                }
+            }
 
             PartialDate date;
             var fr = n["first_release"];
@@ -115,6 +127,37 @@ namespace Atlas.Client
                     cands.Add(new ResolveCandidate { Id = c["id"].AsString(), Score = c["score"].AsDouble() });
             res.Candidates = cands;
             return res;
+        }
+
+        /// <summary>
+        /// <c>POST /games/batch</c> (client-api 1.0): <c>{"results": [{"requested", "status": "ok" | "not_found", "game"}]}</c>, in
+        /// request order. Only <c>ok</c> items with a record are returned; <c>not_found</c> and any status added later are skipped.
+        /// A bare record in the list (a pre-release draft shape) is still read.
+        /// A merged-away id answers the survivor: when <c>requested</c> differs from the record's id and Atlas did not say
+        /// <c>redirected_from</c>, the requested id is put there, so a caller can always map an answer back with
+        /// <see cref="AtlasRecord.Answers"/>. Two requests that land on one survivor give two entries with the same id.
+        /// </summary>
+        public static IReadOnlyList<AtlasRecord> ReadBatch(JsonNode n)
+        {
+            var list = new List<AtlasRecord>();
+            foreach (var item in (n["results"].Kind == JsonKind.Array ? n["results"] : n["items"]).Items)
+            {
+                if (item.Kind != JsonKind.Object) continue;
+                AtlasRecord r;
+                var status = item["status"].AsString();
+                if (status != null || item.Has("requested"))
+                {
+                    if (status != "ok") continue;
+                    r = ReadRecord(item["game"].Kind == JsonKind.Object ? item["game"] : item["record"]);
+                    var requested = item["requested"].AsString();
+                    if (r != null && !string.IsNullOrEmpty(requested) && string.IsNullOrEmpty(r.RedirectedFrom)
+                        && !string.Equals(requested, r.Id, StringComparison.Ordinal))
+                        r.RedirectedFrom = requested;
+                }
+                else r = ReadRecord(item);
+                if (r != null) list.Add(r);
+            }
+            return list;
         }
 
         public static IReadOnlyList<ResolveResult> ReadResolve(JsonNode n)
@@ -175,9 +218,12 @@ namespace Atlas.Client
                     ImageUrl = x["image_url"].AsString(),
                 });
             }
-            // primary: today a role maps to the whole artwork object, A24 maps it to an artwork id. Accept both.
+            // client-api 1.0: primary_by_role maps a ROLE (cover, background, icon, logo) to an artwork id or null, already ranked.
+            // `primary` is keyed by artwork KIND (hero, key_art, ...) and is only a fallback for an Atlas without primary_by_role;
+            // a kind that is not also a role name is never taken for one, because callers look roles up by name.
             var primary = new Dictionary<string, string>();
-            foreach (var m in n["primary"].Members)
+            var byRole = n["primary_by_role"];
+            foreach (var m in (byRole.Kind == JsonKind.Object ? byRole : n["primary"]).Members)
             {
                 var id = m.Value.AsString() ?? (m.Value.Kind == JsonKind.Object ? m.Value["id"].AsString() : null) ?? Text(m.Value);
                 if (id != null) primary[m.Key] = id;
@@ -216,12 +262,38 @@ namespace Atlas.Client
             return map;
         }
 
+        /// <summary>subjects, else genres, else (books only) features: Atlas files Open Library subjects under features.</summary>
+        private static IReadOnlyList<string> Topics(JsonNode n)
+        {
+            var subjects = Strings(n["subjects"]);
+            if (subjects.Count > 0) return subjects;
+            var genres = Strings(n["genres"]);
+            if (genres.Count > 0) return genres;
+            return MediaTypes.Parse(n["media_type"].AsString()) == MediaTypeKind.Book ? Strings(n["features"]) : genres;
+        }
+
         private static IReadOnlyList<Edition> Editions(JsonNode n)
         {
             var list = new List<Edition>();
             foreach (var e in n.Items)
-                if (e.Kind == JsonKind.Object)
-                    list.Add(new Edition { Name = e["name"].AsString(), ProviderIds = StringMap(e["provider_ids"]) });
+            {
+                if (e.Kind != JsonKind.Object) continue;
+                var ed = new Edition
+                {
+                    Name = e["name"].AsString(),
+                    Format = e["format"].AsString(),
+                    Isbn13 = Text(e["isbn_13"]),
+                    Isbn10 = Text(e["isbn_10"]),
+                    Language = e["language"].AsString(),
+                    Publisher = FirstString(e["publisher"]),
+                    ProviderIds = StringMap(e["provider_ids"]),
+                };
+                PartialDate published;
+                var pub = e["published"];
+                if (pub.Kind == JsonKind.Object && PartialDate.TryParse(pub["date"].AsString(), pub["precision"].AsString(), out published))
+                    ed.Published = published;
+                list.Add(ed);
+            }
             return list;
         }
 

@@ -30,17 +30,57 @@ def test_resolve_fixture_matches_the_digest_atlas_pins():
     assert pin.digest(fixture) == (fixture.parent / (fixture.name + ".sha256")).read_text().split()[0]
 
 
-def test_release_check_refuses_scaffold_stand_ins():
-    problems = pin.placeholders()
+def test_the_contract_is_the_real_atlas_one():
+    """A24 replaced the scaffold stand-ins: release-check passes and the files are the ones Atlas generated."""
+    assert pin.placeholders() == []
+    spec = json.loads((CONTRACT / "openapi-client-v1.json").read_text(encoding="utf-8"))
+    assert "x-placeholder" not in spec and spec["info"]["version"] == "1.0"
+    assert spec["x-client-api"]["version"] == "1.0"
+    for path in ("/api/v2/site", "/api/v2/games/batch", "/api/v2/client/pair", "/api/v2/client/pair/poll", "/api/v2/resolve"):
+        assert path in spec["paths"], path
+    manifest = json.loads((CONTRACT / "fixtures" / "MANIFEST.json").read_text(encoding="utf-8"))
+    assert manifest["seed"] == "connectors-v1" and manifest["client_api"] == "1.0"
+    assert (CONTRACT / "fixtures" / "VERSION").read_text().strip() == "client-api-1.0+connectors-v1"
+    for entry in manifest["files"]:
+        assert (CONTRACT / "fixtures" / entry["file"]).is_file(), entry["file"]
+
+
+def test_openapi_matches_the_sha256_atlas_ships_with_it():
+    spec = CONTRACT / "openapi-client-v1.json"
+    assert pin.digest(spec) == (CONTRACT / "openapi-client-v1.json.sha256").read_text().split()[0]
+
+
+def test_release_check_refuses_scaffold_stand_ins(scratch):
+    spec = json.loads((scratch / "openapi-client-v1.json").read_text(encoding="utf-8"))
+    spec["x-placeholder"] = True
+    (scratch / "openapi-client-v1.json").write_text(json.dumps(spec), encoding="utf-8")
+    (scratch / "fixtures" / "VERSION").write_text("scaffold-0\n", encoding="utf-8")
+    (scratch / "fixtures" / "books" / "draft.json").write_text('{"_status": "draft"}', encoding="utf-8")
+    problems = pin.placeholders(scratch)
     assert any("placeholder" in p for p in problems)
     assert any("scaffold" in p for p in problems)
     assert any("hand-written draft" in p for p in problems)
 
 
+def test_atlas_fixture_sums_must_keep_agreeing(scratch):
+    target = scratch / "fixtures" / "games" / "site.json"
+    target.write_text(target.read_text(encoding="utf-8").replace("Atlas", "Atlas!"), encoding="utf-8")
+    (scratch / "fixtures" / "games" / "extra.json").write_text("{}\n", encoding="utf-8")
+    pin.write(scratch)                                  # our own pins updated: Atlas's list still disagrees
+    problems = pin.check(scratch)
+    assert "fixtures/SHA256SUMS disagrees with games/site.json" in problems
+    assert "fixtures/SHA256SUMS does not list games/extra.json" in problems
+
+
 def test_fixtures_hold_no_credentials():
     for path in CONTRACT.rglob("*.json"):
+        if path.name == "openapi-client-v1.json":
+            continue  # the schema names the members (`token`, `poll_token`) and documents `Bearer`
         text = path.read_text(encoding="utf-8").lower()
         assert "bearer " not in text and '"token"' not in text and "secret" not in text, path
+    # the pairing answers carry placeholders, never a real poll token
+    started = json.loads((CONTRACT / "fixtures" / "pairing" / "pair-started.json").read_text(encoding="utf-8"))
+    assert started["response"]["poll_token"] == "<poll-token>"
 
 
 def _vector_record(case):
@@ -83,6 +123,33 @@ def test_playnite_vectors_agree_with_their_records():
         assert not set(case["expect"]) & set(case.get("expect_absent", [])), case["name"]
 
 
+def _vector_cases():
+    for name in ("playnite.json", "jellyfin.json"):
+        for case in json.loads((CONTRACT / "vectors" / name).read_text(encoding="utf-8"))["cases"]:
+            yield name, case
+
+
+def test_upstream_issue_markers_are_well_formed():
+    for name, case in _vector_cases():
+        marker = case.get("upstream_issue")
+        if marker is None:
+            continue
+        where = f"{name}: {case['name']}"
+        assert set(marker) == {"fields", "atlas_ref", "note"}, where
+        assert marker["fields"] and set(marker["fields"]) <= set(case["expect"]), where
+        assert len(marker["atlas_ref"]) == 40 and marker["note"].strip(), where
+
+
+def test_the_merge_survivor_title_is_marked_as_a_suspected_atlas_defect():
+    # The recorded survivor (lanternfall) carries the merged-away duplicate's title. A vector may pin it only while it says
+    # so, so a later Atlas fix that renames it back to "Lanternfall" is not read as a connector regression.
+    for name, case in _vector_cases():
+        record = _vector_record(case)
+        survivor_with_dup_title = "(duplicate entry)" in str(record.get("title")) and not record.get("redirected_from")
+        if survivor_with_dup_title and case.get("expect", {}).get("Name") == record["title"]:
+            assert "Name" in case.get("upstream_issue", {}).get("fields", []), f"{name}: {case['name']}"
+
+
 def test_vector_records_are_synthetic_and_contain_no_secrets():
     for path in (CONTRACT / "vectors" / "records").glob("*.json"):
         text = path.read_text(encoding="utf-8").lower()
@@ -92,7 +159,8 @@ def test_vector_records_are_synthetic_and_contain_no_secrets():
 
 def test_forward_compat_record_really_has_unknown_members():
     record = json.loads((CONTRACT / "fixtures" / "forward-compat" / "record-unknown-members.json").read_text("utf-8"))
-    assert "a_field_added_in_a_later_minor" in record and record["platform_family"] == "holographic"
+    assert record["x_future_member"]["ignore"] is True                       # an unknown member
+    assert record["editions"][0]["format"] == "x_future_format"              # an unknown vocabulary value
 
 
 # --- pin mechanics on a scratch copy ----------------------------------------------------------------------------
@@ -116,7 +184,7 @@ def test_pin_detects_change_addition_and_removal(scratch):
 
 
 def test_pin_write_then_check_is_clean(scratch):
-    (scratch / "fixtures" / "games" / "new.json").write_text("{}\n", encoding="utf-8")
+    (scratch / "vectors" / "new.json").write_text("{}\n", encoding="utf-8")
     pin.write(scratch)
     assert pin.check(scratch) == []
 
@@ -138,16 +206,9 @@ def test_sidecar_digest_disagreement_is_reported(scratch):
     assert any("disagrees" in p for p in pin.check(scratch))
 
 
-def test_release_check_passes_once_stand_ins_are_replaced(scratch):
-    (scratch / "openapi-client-v1.json").write_text('{"openapi": "3.1.0", "paths": {}}\n', encoding="utf-8")
-    (scratch / "fixtures" / "VERSION").write_text("1.0.0\n", encoding="utf-8")
-    shutil.rmtree(scratch / "fixtures" / "books")
-    assert pin.placeholders(scratch) == []
-
-
 def test_pin_cli(capsys):
     assert pin.main(["check"]) == 0
-    assert pin.main(["release-check"]) == 1
+    assert pin.main(["release-check"]) == 0
     assert "contract pins hold" in capsys.readouterr().out
 
 
@@ -178,16 +239,70 @@ def test_testkit_seed_mapping_nests_facts_and_posts_in_order(monkeypatch):
         (f"/games/{ids['merge_b']}/merge", {"into": ids["merge_c"]})]
 
 
-def test_testkit_books_skipped_loudly_without_a_book_type(capsys):
-    class NoBooks(kit.Atlas):
-        def __init__(self):
-            pass
+def test_testkit_cli_seed_is_parsed():
+    answer = kit.parse_cli_seed('note: seeding\n{"fixture": "connectors-v1", "created": true, '
+                                '"ids": {"lanternfall": "atlas:1", "the-lamp-keeper": "atlas:2"}, "token": "t", "token_id": "i"}\n')
+    assert answer["ids"] == {"lanternfall": "atlas:1", "the-lamp-keeper": "atlas:2"} and answer["token"] == "t"
+    pretty = kit.parse_cli_seed(json.dumps({"fixture": "connectors-v1", "created": False, "ids": {"a": "atlas:9"}}, indent=2))
+    assert pretty["created"] is False
+    for bad in ("", "nothing here", '{"ids": {}}', '{"ids": {"a": 5}}', '{"level": "info"}\n{"ids": {}}\n'):
+        with pytest.raises(kit.TestkitError):
+            kit.parse_cli_seed(bad)
 
-        def ok(self, *a, **k):
-            return {"media_types": ["game"]}
 
-    assert kit.seed_books(NoBooks(), "admin") == {}
+def test_testkit_cli_seed_skips_a_json_log_line_after_the_answer():
+    # regression: the first JSON line without `ids` used to end the search with an error
+    out = ('{"fixture": "connectors-v1", "created": true, "ids": {"lanternfall": "atlas:1"}, "token": "secret-value"}\n'
+           '{"level": "info", "event": "seed done"}\n'
+           '{"ids": {"not": "an atlas id"}}\n')
+    assert kit.parse_cli_seed(out)["ids"] == {"lanternfall": "atlas:1"}
+    with pytest.raises(kit.TestkitError) as err:
+        kit.parse_cli_seed('{"token": "secret-value"}\n{"level": "info"}\n')
+    assert "secret-value" not in str(err.value)
+
+
+class _Done:
+    def __init__(self, returncode, stdout="", stderr=""):
+        self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
+
+
+def test_testkit_cli_seed_runs_atlas_seed_and_falls_back_when_missing(monkeypatch, capsys):
+    calls = []
+
+    def fake_docker(*args, check=True, **options):
+        calls.append(args)
+        if args[-1] == "--help":
+            return _Done(0)
+        return _Done(0, '{"fixture": "connectors-v1", "created": true, "ids": {"lanternfall": "atlas:1"}, "token": "tok"}')
+
+    monkeypatch.setattr(kit, "docker", fake_docker)
+    assert kit.seed_with_atlas_cli("c1")["ids"] == {"lanternfall": "atlas:1"}
+    assert calls[-1] == ("exec", "c1", "atlas", "seed", "--fixture", "connectors-v1", "--token")
+    assert kit.seed_with_atlas_cli(None) is None
+
+    monkeypatch.setattr(kit, "docker", lambda *a, **k: _Done(2, stderr="no such command"))
+    assert kit.seed_with_atlas_cli("c1") is None
     assert "NOT seeded" in capsys.readouterr().err
+
+
+def test_testkit_cli_seed_failure_never_echoes_stdout(monkeypatch):
+    def fake_docker(*args, check=True, **options):
+        if args[-1] == "--help":
+            return _Done(0)
+        return _Done(1, '{"token": "tok-SHOULD-NOT-LEAK"}', "refused: the database holds records")
+
+    monkeypatch.setattr(kit, "docker", fake_docker)
+    with pytest.raises(kit.TestkitError) as err:
+        kit.seed_with_atlas_cli("c1")
+    assert "refused" in str(err.value) and "SHOULD-NOT-LEAK" not in str(err.value)
+
+
+def test_testkit_seed_names_do_not_clash_with_the_resolve_fixture():
+    resolve = {s["name"] for s in json.loads(kit.RESOLVE_FIXTURE.read_text(encoding="utf-8"))["seeds"]}
+    cli = set(json.loads((CONTRACT / "fixtures" / "MANIFEST.json").read_text(encoding="utf-8"))["seed_ids"])
+    assert cli == {"lanternfall", "copper-tide", "quiet-orbit", "lanternfall-duplicate", "the-lamp-keeper",
+                   "salt-and-signal", "the-far-light", "series-lamp-cycle", "unknown-type"}
+    assert not resolve & cli
 
 
 def test_testkit_cli_requires_a_command_and_a_source(capsys):

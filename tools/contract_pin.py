@@ -6,8 +6,11 @@
     python tools/contract_pin.py release-check   # check + refuse placeholders (used by the client-contract release)
 
 Hashes are taken over LF-normalised bytes so a CRLF checkout (Windows ``core.autocrlf``) gives the same digest.
-``contract/SHA256SUMS`` covers every file under ``contract/`` except itself. The pinned OpenAPI file carries
-``"x-placeholder": true`` until Atlas generates the real one; ``release-check`` fails while it does.
+``contract/SHA256SUMS`` covers every file under ``contract/`` except any file named ``SHA256SUMS``. The files under
+``contract/fixtures/`` and ``contract/openapi-client-v1.json`` are copied unchanged from Atlas (A24: ``contracts/``),
+so the pins Atlas ships with them must keep agreeing too: ``fixtures/SHA256SUMS`` (Atlas's list for the fixture set)
+and every ``*.json.sha256`` sidecar. ``release-check`` also refuses scaffold stand-ins (an ``"x-placeholder": true``
+OpenAPI file, a ``scaffold`` fixture version, a hand-written ``_status`` draft) should one ever come back.
 """
 from __future__ import annotations
 
@@ -58,11 +61,23 @@ def check(contract: Path = CONTRACT) -> list[str]:
     problems = [f"changed: {n}" for n in sorted(pinned.keys() & actual.keys()) if pinned[n] != actual[n]]
     problems += [f"not pinned: {n}" for n in sorted(actual.keys() - pinned.keys())]
     problems += [f"missing: {n}" for n in sorted(pinned.keys() - actual.keys())]
-    # Atlas's own pin for the resolve fixture must keep agreeing with ours.
+    # Atlas's own pins (the resolve fixture and OpenAPI sidecars, the fixture set's SHA256SUMS) must keep agreeing.
     for sidecar in sorted(contract.rglob("*.json.sha256")):
         target = sidecar.with_suffix("")
         if target.exists() and sidecar.read_text().split()[0] != digest(target):
             problems.append(f"{sidecar.relative_to(contract).as_posix()} disagrees with {target.name}")
+    for upstream in sorted(p for p in contract.rglob(SUMS) if p.parent != contract):
+        folder = upstream.parent
+        listed = read_sums(folder)
+        where = folder.relative_to(contract).as_posix()
+        for name, value in sorted(listed.items()):
+            target = folder / name
+            if not target.is_file():
+                problems.append(f"{where}/{SUMS} lists a missing file: {name}")
+            elif digest(target) != value:
+                problems.append(f"{where}/{SUMS} disagrees with {name}")
+        for name in sorted(set(files(folder)) - set(listed)):
+            problems.append(f"{where}/{SUMS} does not list {name}")
     return problems
 
 

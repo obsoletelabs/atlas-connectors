@@ -106,3 +106,12 @@ extension; `Toolbox.exe pack` was never run; Playnite 11 was not looked at.
 | Jellyfin uses `System.Text.Json` | The packages compile and the adapter works under the test host; which serializer the server's own API uses was not checked. The plugin only needs that the runtime ships it, which both target frameworks do | |
 
 What was **not** done: no Jellyfin server loaded the plugin; no real Atlas was contacted; `jprm` was not run; the release workflow has not run on GitHub.
+
+## Facts checked for the client-api 1.0 adoption (PR 5 fix pass), 2026-11-12
+
+| Fact | Result | Evidence |
+|---|---|---|
+| Jellyfin `PersonKind` has `Author`, `Translator`, `Illustrator`, `Editor` and `Unknown` (used for book creator roles) | **Confirmed** in both supported ABIs: the names are in the `Jellyfin.Data` assemblies 10.11.11 (`net9.0`) and 12.4.0 (`net10.0`), and `ItemMapper.PersonKindOf` compiles against both in CI. There is no `Narrator` kind, so `narrator` (and any role Atlas adds later) maps to `Unknown`. Display of these kinds on a book page in a real server is **unverified** | `~/.nuget/packages/jellyfin.data/{10.11.11,12.4.0}/lib/*/Jellyfin.Data.dll`; `contract/vectors/jellyfin.json` creator-roles case |
+| Atlas resolves an ISBN through `/resolve` with namespace `isbn` | **Confirmed in source, not live**: `isbn` is Atlas's crosswalk namespace of ISBN-13s (`atlas/books.py` `ISBN_NAMESPACE`, C15 2.5) and `/resolve` looks provider ids up in the crosswalk by `(namespace, external_id)` (`atlas/resolve.py` -> `matching.match`), so only the bare ISBN-13 matches; the connector normalises first. `GET /games?q=<isbn>` answers the work alone (`service._isbn_hit`, OpenAPI `q`, `books/search-isbn.json`) | Atlas `a6bbc2a` source; recorded fixture |
+| Atlas `PairBody.label` "Printable" | **Confirmed in source**: `pairing.clean_label` refuses a label that is empty, longer than 64 code points or not `str.isprintable()` (which is false for control, format, private-use, unassigned, surrogate and every separator except the ASCII space) | Atlas `a6bbc2a` `atlas/pairing.py`, `atlas/api/routes.py` `PairBody` |
+| Atlas has `tmdb` / `imdb` / `tvdb` / `anilist` namespaces | **No**: no provider in Atlas `a6bbc2a` writes them; the Jellyfin namespace names for movies and series stay provisional | `grep` of Atlas `a6bbc2a` `atlas/` |
