@@ -161,35 +161,12 @@ jobs:
           if-no-files-found: ignore
 
   # The live lane: a REAL Atlas, seeded with synthetic data, and the replay of the resolve contract against it.
-  # Atlas is private, so the source is fetched with ATLAS_CHECKOUT_TOKEN (read-only contents on the Atlas repository)
-  # exactly as the plugins repository does. Whether the secret exists is decided in its own small job, so that without
-  # it `live-atlas` itself shows as SKIPPED (grey) in the checks list, never as a green pass, and `required` says in its
-  # log and summary that it passed WITHOUT the live lane. Once the secret exists any failure fails the job. Fork pull
-  # requests have no secrets and skip it. Once Atlas publishes a container image, replace the build with a pinned image
-  # digest and drop the secret (decision D15.19).
-  live-access:
+  # The Atlas repository is public, so its source is fetched with a plain checkout: no secret is needed. Fork pull
+  # requests are skipped (they are untrusted and the lane builds and runs Atlas). Once Atlas publishes a container
+  # image, replace the build with a pinned image digest (decision D15.19).
+  live-atlas:
     needs: gate
     if: needs.gate.outputs.live == 'true' && github.event.pull_request.head.repo.fork != true
-    runs-on: ubuntu-24.04
-    outputs:
-      available: ${{ steps.access.outputs.available }}
-    steps:
-      - id: access
-        env:
-          ATLAS_TOKEN: ${{ secrets.ATLAS_CHECKOUT_TOKEN }}
-        run: |
-          if [ -z "$ATLAS_TOKEN" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Secret ATLAS_CHECKOUT_TOKEN is not configured, so the live Atlas lane will be SKIPPED (not passed)."
-            echo "### Live Atlas lane skipped" >> "$GITHUB_STEP_SUMMARY"
-            echo "Add the \`ATLAS_CHECKOUT_TOKEN\` secret (read-only contents on the Atlas repository) to enable it." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  live-atlas:
-    needs: [gate, live-access]
-    if: needs.live-access.outputs.available == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -204,7 +181,6 @@ jobs:
         with:
           repository: ${{ env.ATLAS_REPOSITORY }}
           ref: ${{ env.ATLAS_REF }}
-          token: ${{ secrets.ATLAS_CHECKOUT_TOKEN }}
           path: .validation/atlas
           persist-credentials: false
       - uses: actions/setup-python@v6
@@ -219,7 +195,7 @@ jobs:
   # but could not run (no secret) does not fail this check, but it is never reported as a pass: the log, a warning
   # annotation and the job summary all say "passed WITHOUT the live Atlas lane".
   required:
-    needs: [gate, python, dotnet, package-playnite, package-jellyfin, live-access, live-atlas]
+    needs: [gate, python, dotnet, package-playnite, package-jellyfin, live-atlas]
     if: always()
     runs-on: ubuntu-24.04
     steps:
