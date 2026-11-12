@@ -182,6 +182,76 @@ public class ClientTests
     }
 
     [Fact]
+    public async Task Every_batch_answer_maps_back_to_the_id_it_was_requested_by()
+    {
+        // Atlas names `requested` on every item; a survivor answered without `redirected_from` still says which id asked for it
+        using var rig = new Rig();
+        rig.Handler.On("POST", "/api/v2/games/batch", _ => Reply.Json("{\"results\":["
+            + "{\"requested\":\"atlas:old\",\"status\":\"ok\",\"game\":{\"id\":\"atlas:live\",\"title\":\"Live\"}},"
+            + "{\"requested\":\"atlas:live\",\"status\":\"ok\",\"game\":{\"id\":\"atlas:live\",\"title\":\"Live\"}},"
+            + "{\"requested\":\"atlas:gone\",\"status\":\"not_found\",\"game\":null}]}"));
+        var records = await rig.Client.GetRecordsAsync(new[] { "atlas:old", "atlas:live", "atlas:gone" });
+
+        Assert.Equal(2, records.Count);
+        Assert.Equal("atlas:old", records[0].RedirectedFrom);
+        Assert.Null(records[1].RedirectedFrom);
+        Assert.True(records[0].Answers("atlas:old") && records[0].Answers("atlas:live"));
+        Assert.False(records[1].Answers("atlas:old"));
+        Assert.DoesNotContain(records, r => r.Answers("atlas:gone") || r.Answers(null));
+    }
+
+    [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
+    public async Task The_recorded_batch_answers_every_requested_id_that_exists(string adapter)
+    {
+        using var rig = new Rig(adapter);
+        rig.Handler.On("POST", "/api/v2/games/batch", _ => Reply.Json(Fixtures.Body("fixtures/games/batch-mixed.json")));
+        var request = new SystemTextJsonAdapter().Parse(Fixtures.Request("fixtures/games/batch-mixed.json"));
+        var ids = request["ids"].Items.Select(i => i.AsString()).ToList();
+        var records = await rig.Client.GetRecordsAsync(ids);
+        var known = ids.Where(i => i != "atlas:00000000000000000000000000").ToList();
+        Assert.Equal(3, known.Count);
+        Assert.All(known, id => Assert.Contains(records, r => r.Answers(id)));
+    }
+
+    [Theory]
+    [InlineData("9780000000118", "9780000000118")]
+    [InlineData("978-0-00-000011-8", "9780000000118")]
+    [InlineData("0-00-000011-6", "9780000000118")]                      // the ISBN-10 of the same edition
+    [InlineData("0000000116", "9780000000118")]
+    [InlineData("urn:isbn:9780000000101", "9780000000101")]
+    [InlineData("ISBN 978 0 00 000010 1", "9780000000101")]
+    [InlineData("080442957X", "9780804429573")]
+    [InlineData("9780000000119", null)]                                 // wrong check digit
+    [InlineData("0000000117", null)]
+    [InlineData("1234567890123", null)]                                 // not 978/979
+    [InlineData("12345", null)]
+    [InlineData("97800000001X8", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void Isbn_text_normalises_to_the_isbn13_atlas_keys_by(string text, string expected)
+    {
+        Assert.Equal(expected, IsbnText.ToIsbn13(text));
+    }
+
+    [Fact]
+    public void Every_recorded_edition_isbn10_normalises_to_its_isbn13()
+    {
+        var json = new SystemTextJsonAdapter();
+        var n = 0;
+        foreach (var f in new[] { "the-lamp-keeper", "salt-and-signal", "the-far-light" })
+        {
+            foreach (var e in AtlasReader.ReadRecord(json.Parse(Fixtures.Text("fixtures/books/record-" + f + ".json"))).Editions)
+            {
+                if (e.Isbn10 == null) continue;
+                Assert.Equal(e.Isbn13, IsbnText.ToIsbn13(e.Isbn10));
+                Assert.Equal(e.Isbn13, IsbnText.ToIsbn13(e.Isbn13));
+                n++;
+            }
+        }
+        Assert.True(n >= 3);
+    }
+
+    [Fact]
     public async Task Without_the_batch_capability_it_falls_back_to_single_gets_and_skips_unknown_ids()
     {
         using var rig = new Rig(site: Rig.LegacySite);

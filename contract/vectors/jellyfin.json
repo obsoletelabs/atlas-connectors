@@ -17,6 +17,7 @@
         "SeriesName": "The Lamp Cycle",
         "IndexNumber": 1,
         "Authors": ["Ada Quillfeather"],
+        "People": [{"Name": "Ada Quillfeather", "Kind": "Author"}, {"Name": "Tomas Vell", "Kind": "Translator"}],
         "ProviderIds": {"Atlas": "atlas:01kdvdna9c000000000000000y", "Isbn": "9780000000118"}
       },
       "expect_absent": ["Tags", "Studios"]
@@ -30,6 +31,7 @@
         "ProductionYear": 2008,
         "Genres": ["Radio", "Essays"],
         "Authors": ["Ines Morrow"],
+        "People": [{"Name": "Ines Morrow", "Kind": "Author"}, {"Name": "Pell Arden", "Kind": "Unknown"}],
         "ProviderIds": {"Atlas": "atlas:01kdvdnaaa0000000000000011", "Isbn": "9780000000200"}
       },
       "expect_absent": ["PremiereDate", "SeriesName", "IndexNumber", "Studios"]
@@ -45,6 +47,25 @@
         "Authors": ["Ada Example", "B. Placeholder"]
       },
       "expect_absent": ["PremiereDate", "IndexNumber"]
+    },
+    {
+      "name": "book: every creator role maps to a Jellyfin person kind (no role = author; narrator and unknown roles = Unknown); an author repeated as developer is not a studio, the publisher is",
+      "kind": "book",
+      "record": "vectors/records/book-creator-roles.json",
+      "expect": {
+        "Name": "Synthetic Many Hands",
+        "Authors": ["Ada Example", "Cal Example"],
+        "People": [
+          {"Name": "Ada Example", "Kind": "Author"},
+          {"Name": "Cal Example", "Kind": "Author"},
+          {"Name": "Dee Example", "Kind": "Illustrator"},
+          {"Name": "Eve Example", "Kind": "Editor"},
+          {"Name": "Fay Example", "Kind": "Translator"},
+          {"Name": "Gil Example", "Kind": "Unknown"},
+          {"Name": "Hal Example", "Kind": "Unknown"}
+        ],
+        "Studios": ["Example Press"]
+      }
     },
     {
       "name": "book: an impossible day never becomes a premiere date",

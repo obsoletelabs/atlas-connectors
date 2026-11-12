@@ -165,19 +165,25 @@ SEED_FIXTURE = "connectors-v1"
 
 
 def parse_cli_seed(stdout: str) -> dict:
-    """The JSON object ``atlas seed --fixture connectors-v1 --token`` prints (the last JSON line, or all of stdout)."""
+    """The JSON object ``atlas seed --fixture connectors-v1 --token`` prints (the last JSON line, or all of stdout).
+
+    Every candidate is tried, last line first: a JSON log line printed after the answer (or any other JSON object without
+    a usable ``ids`` map) is skipped, not fatal. It fails only when no candidate is a usable answer. The error never
+    quotes stdout, which carries the minted token."""
     candidates = [line.strip() for line in reversed(stdout.strip().splitlines()) if line.strip().startswith("{")]
     candidates.append(stdout)
+    saw_json = False
     for text in candidates:
         try:
             answer = json.loads(text)
         except ValueError:
             continue
+        saw_json = True
         ids = answer.get("ids") if isinstance(answer, dict) else None
-        if not isinstance(ids, dict) or not ids or not all(
-                isinstance(v, str) and v.startswith("atlas:") for v in ids.values()):
-            raise TestkitError("`atlas seed` answered without a usable `ids` map")
-        return answer
+        if isinstance(ids, dict) and ids and all(isinstance(v, str) and v.startswith("atlas:") for v in ids.values()):
+            return answer
+    if saw_json:
+        raise TestkitError("`atlas seed` answered without a usable `ids` map")
     raise TestkitError("`atlas seed` printed no JSON answer")
 
 

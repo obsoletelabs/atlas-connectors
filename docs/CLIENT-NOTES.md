@@ -8,10 +8,10 @@ Atlas shows up here as a pin failure first (`tools/contract_pin.py check`) and t
 
 | Item | What the client does | Pinned by |
 |---|---|---|
-| `POST /client/pair` request | sends `{"label": "..."}` only, at most 64 characters (`PairBody` refuses unknown members) | `PairingTests.Request_bodies_fit_the_openapi_schemas_which_refuse_unknown_members`, `fixtures/pairing/pair-started.json` |
+| `POST /client/pair` request | sends `{"label": "..."}` only, at most 64 characters and printable (`PairBody` refuses unknown members, and Atlas checks the label with Python `str.isprintable`: control, format, private-use and unassigned characters are dropped, other separators become one space) | `PairingTests.Request_bodies_fit_the_openapi_schemas_which_refuse_unknown_members`, `fixtures/pairing/pair-started.json` |
 | pair answer | reads `code`, `verify_url`, `verify_url_complete`, `qr_svg`, `poll_token`, `expires_in`, `interval` (`user_code` still accepted) | `PairingTests.The_recorded_pairing_answers_are_understood` |
 | `POST /client/pair/poll` | sends `{"poll_token": "..."}`; reads the always-200 `status` (`pending`, `slow_down` + `interval`, `approved` + `token`, `token_id`, `name`, `scopes`, `denied` + `reason`, `expired`). RFC 8628 error codes in an error envelope and a 429 are still understood; an unknown status keeps waiting | `PairingTests` |
-| `POST /games/batch` | sends `{"ids": [...]}` (200 max); reads `results[]` of `{requested, status, game}`, keeps `ok`, skips `not_found` and unknown statuses | `ReaderTests.Recorded_batch_answer_skips_not_found_and_follows_merges`, `ClientTests.The_recorded_batch_answer_...` |
+| `POST /games/batch` | sends `{"ids": [...]}` (200 max); reads `results[]` of `{requested, status, game}`, keeps `ok`, skips `not_found` and unknown statuses; when `requested` is not the answered id and Atlas sent no `redirected_from`, `requested` is put there (`AtlasRecord.Answers`) | `ReaderTests.Recorded_batch_answer_skips_not_found_and_follows_merges`, `ClientTests.The_recorded_batch_answer_...` |
 | `client_api` in `/site` | `{version, min_supported, capabilities[], deprecations[], limits}` | `ReaderTests.Site_with_and_without_client_api` |
 | artwork | `primary_by_role` (role -> id); `primary` (kind -> object) only when `primary_by_role` is absent | `ReaderTests.Relations_and_artwork_shapes` |
 | books | `authors[].role`, editions with `format`/`isbn_13`/`isbn_10`/`published`, series from `relations.members_of`, subjects from `features` | `ReaderTests.Recorded_book_record` |

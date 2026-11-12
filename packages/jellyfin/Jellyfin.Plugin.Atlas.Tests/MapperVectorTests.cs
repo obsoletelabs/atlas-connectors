@@ -31,23 +31,23 @@ public class MapperVectorTests
         return AtlasReader.ReadRecord(Json.Parse(Repo.Text(baseDir, relative.Replace('/', Path.DirectorySeparatorChar))));
     }
 
-    private static (BaseItem Item, List<string> Authors) Map(string kind, AtlasRecord r)
+    private static (BaseItem Item, List<PersonInfo> People) Map(string kind, AtlasRecord r)
     {
         switch (kind)
         {
             case "book":
                 var b = ItemMapper.ToBook(r);
-                var authors = (b.People ?? new List<PersonInfo>()).Where(p => p.Type == PersonKind.Author).Select(p => p.Name).ToList();
-                return (b.Item, authors);
-            case "movie": return (ItemMapper.ToMovie(r).Item, new List<string>());
-            case "series": return (ItemMapper.ToSeries(r).Item, new List<string>());
+                return (b.Item, b.People?.ToList() ?? new List<PersonInfo>());   // List in 10.11, IReadOnlyList in 12
+            case "movie": return (ItemMapper.ToMovie(r).Item, new List<PersonInfo>());
+            case "series": return (ItemMapper.ToSeries(r).Item, new List<PersonInfo>());
             default: throw new InvalidOperationException("unknown kind " + kind);
         }
     }
 
     /// <summary>The value of a vector field on the mapped item, as JSON text; null when the item has none.</summary>
-    private static JsonElement? Project(BaseItem item, List<string> authors, string field)
+    private static JsonElement? Project(BaseItem item, List<PersonInfo> people, string field)
     {
+        var authors = people.Where(p => p.Type == PersonKind.Author).Select(p => p.Name).ToList();
         object value = field switch
         {
             "Name" => item.Name,
@@ -60,6 +60,7 @@ public class MapperVectorTests
             "SeriesName" => (item as Book)?.SeriesName,
             "IndexNumber" => item.IndexNumber,
             "Authors" => authors.Count > 0 ? authors : null,
+            "People" => people.Count > 0 ? people.Select(p => new Dictionary<string, string> { ["Name"] = p.Name, ["Kind"] = p.Type.ToString() }).ToList() : null,
             "ProviderIds" => item.ProviderIds.Count > 0 ? item.ProviderIds : null,
             _ => throw new InvalidOperationException("vector names a field this test cannot project: " + field),
         };
@@ -90,11 +91,11 @@ public class MapperVectorTests
     {
         using var doc = JsonDocument.Parse(Repo.Text("contract", "vectors", "jellyfin.json"));
         var c = doc.RootElement.GetProperty("cases").EnumerateArray().Single(x => x.GetProperty("name").GetString() == name);
-        var (item, authors) = Map(c.GetProperty("kind").GetString(), LoadRecord(c.GetProperty("record").GetString()));
+        var (item, people) = Map(c.GetProperty("kind").GetString(), LoadRecord(c.GetProperty("record").GetString()));
 
         foreach (var e in c.GetProperty("expect").EnumerateObject())
         {
-            var got = Project(item, authors, e.Name);
+            var got = Project(item, people, e.Name);
             Assert.True(got.HasValue && Matches(e.Value, got.Value), name + ": " + e.Name + " expected " + e.Value.GetRawText() + " got " + (got?.GetRawText() ?? "nothing"));
         }
 
@@ -102,7 +103,7 @@ public class MapperVectorTests
         {
             foreach (var f in absent.EnumerateArray())
             {
-                Assert.Null(Project(item, authors, f.GetString()));
+                Assert.Null(Project(item, people, f.GetString()));
             }
         }
     }
