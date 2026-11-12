@@ -256,7 +256,8 @@ namespace Atlas.Playnite
         }
 
         /// <summary>
-        /// The artwork Atlas ranks first for a role (<c>primary</c>, A24), else the one flagged preferred, else the first of that kind.
+        /// The artwork Atlas ranks first for a role (<c>primary_by_role</c>, client-api 1.0), else the one flagged preferred, else the
+        /// first of that kind.
         /// <paramref name="kinds"/> are tried in order (cover then poster). An unknown kind is never picked.
         /// </summary>
         public static Artwork Pick(ArtworkList list, params string[] kinds)

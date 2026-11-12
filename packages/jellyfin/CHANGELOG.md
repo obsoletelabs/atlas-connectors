@@ -18,3 +18,7 @@ First version.
 - Offline: a cached record is used for up to 7 days when Atlas cannot be reached.
 - Builds for Jellyfin 10.11 (`net9.0`, targetAbi 10.11.0.0) and Jellyfin 12 (`net10.0`, targetAbi 12.0.0.0).
 - Reads only. Never writes to Atlas.
+- client-api 1.0 (Atlas A24): the ISBN comes from `provider_ids.isbn` or the first edition's `isbn_13`; only creators with the role `author`
+  are authors (translators, illustrators and editors get their own person kinds, other roles are kept as Unknown); the series comes from
+  the record's relations; a book's `developer` (its author) is no longer shown as a studio; images use `primary_by_role`; the pairing link
+  is `verify_url_complete`.

@@ -29,7 +29,7 @@ only, keeping Jellyfin and the shared client permissive. That is an owner decisi
 
 ## Files copied from Atlas
 
-`contract/openapi-client-v1.json` (once generated), the recorded fixtures and
+`contract/openapi-client-v1.json`, everything under `contract/fixtures/` (Atlas `contracts/client-fixtures/`) and
 `contract/fixtures/resolve/resolve-contract-v1.json` come out of the Atlas repository, whose code is AGPL-3.0 (or MIT
 on the programme branches that have not yet picked up the AGPL `LICENSE`). Atlas's `DATA-LICENSE.md` dedicates
 user-contributed *data* to CC0. Data and a generated interface description are unlikely to carry AGPL obligations,
@@ -40,11 +40,12 @@ outside contributions to those files.
 **Status: that statement is not yet made.** Until the owner makes it, the Atlas-origin files here rest on the
 reasoning above only.
 
-**Real-world facts in the fixtures.** The Atlas resolve contract (and so the games recorded from it) names a few real
-games with bare facts: title, release date, developer and a public Steam or IGDB numeric id (for example Portal 2,
+**Real-world facts in the fixtures.** The recorded answers (`games/`, `books/`, `pairing/`, `forward-compat/`) are
+synthetic: Atlas records them over its invented `connectors-v1` seed. Only the C4 resolve contract
+(`fixtures/resolve/resolve-contract-v1.json`) still names a few real games with bare facts: title, release date, developer and a public Steam or IGDB numeric id (for example Portal 2,
 Valve, Steam app 620). No descriptions, artwork, reviews or other expressive content, and nothing fetched from a
 provider API, is included. Facts and public identifiers are not copyrightable expression, but they are not synthetic
-either; the final Atlas-generated fixture set should replace them with synthetic records.
+either; the resolve contract is Atlas's to make synthetic.
 
 ## Contributions
 

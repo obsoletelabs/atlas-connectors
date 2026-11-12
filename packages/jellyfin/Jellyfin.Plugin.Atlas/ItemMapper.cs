@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Atlas.Client;
@@ -40,17 +41,52 @@ public static class ItemMapper
             }
         }
 
-        if (r.ProviderIds.TryGetValue("isbn", out var isbn) && !string.IsNullOrWhiteSpace(isbn))
+        // provider_ids.isbn, else the first edition's isbn_13 (client-api 1.0 keeps ISBNs on the editions)
+        var isbn = r.Isbn;
+        if (!string.IsNullOrWhiteSpace(isbn))
         {
-            book.SetProviderId(IsbnKey, isbn.Trim());
+            book.SetProviderId(IsbnKey, isbn);
         }
 
-        foreach (var a in r.Authors.Where(a => !string.IsNullOrWhiteSpace(a.Name)))
+        var people = r.Authors.Where(a => !string.IsNullOrWhiteSpace(a.Name)).ToList();
+        foreach (var a in people)
         {
-            result.AddPerson(new PersonInfo { Name = a.Name.Trim(), Type = PersonKind.Author });
+            var kind = PersonKindOf(a);
+            if (kind.HasValue)
+            {
+                result.AddPerson(new PersonInfo { Name = a.Name.Trim(), Type = kind.Value });
+            }
+        }
+
+        // Atlas repeats a book's author as its `developer`: that is not a studio
+        if (book.Studios is { Length: > 0 })
+        {
+            var names = new HashSet<string>(people.Select(a => a.Name.Trim()), StringComparer.OrdinalIgnoreCase);
+            var studios = book.Studios.Where(s => !names.Contains(s)).ToArray();
+            book.Studios = studios;
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// A creator role to a Jellyfin person kind. A role Jellyfin has no kind for (narrator, or a role added later) maps to
+    /// Unknown ("other"): the person is kept, never taken for an author, and never a failure.
+    /// </summary>
+    public static PersonKind? PersonKindOf(Author a)
+    {
+        if (a.IsAuthor)
+        {
+            return PersonKind.Author;
+        }
+
+        return a.Role switch
+        {
+            "translator" => PersonKind.Translator,
+            "illustrator" => PersonKind.Illustrator,
+            "editor" => PersonKind.Editor,
+            _ => PersonKind.Unknown,
+        };
     }
 
     public static MetadataResult<Movie> ToMovie(AtlasRecord r)

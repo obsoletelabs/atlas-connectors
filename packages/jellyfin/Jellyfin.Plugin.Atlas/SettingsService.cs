@@ -135,7 +135,7 @@ public sealed class SettingsService
     public async Task<PairingStartView> StartPairingAsync(CancellationToken ct)
     {
         var s = await _rt.StartPairingAsync("Jellyfin on " + Environment.MachineName, ct).ConfigureAwait(false);
-        return new PairingStartView { Code = s.UserCode, VerifyUrl = s.VerifyUrl, ExpiresInSeconds = s.ExpiresInSeconds, IntervalSeconds = Math.Max(5, s.IntervalSeconds) };
+        return new PairingStartView { Code = s.UserCode, VerifyUrl = s.VerifyUrlComplete ?? s.VerifyUrl, ExpiresInSeconds = s.ExpiresInSeconds, IntervalSeconds = Math.Max(5, s.IntervalSeconds) };
     }
 
     /// <summary>pending, slow_down, approved, denied, expired or none (nothing started). The token is stored, never returned.</summary>

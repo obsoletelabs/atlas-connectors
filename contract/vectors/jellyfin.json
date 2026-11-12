@@ -5,19 +5,34 @@
   "base_url": "https://atlas.example.org/",
   "cases": [
     {
-      "name": "book: authors, series with a whole-number position, year precision gives no premiere date, ISBN and Atlas ids",
+      "name": "book (recorded): authors only (not the translator), series and position from relations, subjects as genres, edition ISBN, day precision",
       "kind": "book",
-      "record": "books/record-synthetic-lighthouse.json",
+      "record": "books/record-the-lamp-keeper.json",
       "expect": {
-        "Name": "The Synthetic Lighthouse",
-        "ProductionYear": 1999,
-        "Genres": ["Fiction", "Lighthouses"],
-        "SeriesName": "The Fictional Coast",
-        "IndexNumber": 2,
-        "Authors": ["Ada Example", "B. Placeholder"],
-        "ProviderIds": {"Atlas": "atlas:00000000000000000000000001", "Isbn": "9780000000002"}
+        "Name": "The Lamp Keeper",
+        "Overview": "A synthetic novel about a lighthouse, for the Atlas client fixtures.",
+        "ProductionYear": 2005,
+        "PremiereDate": "2005-08-14",
+        "Genres": ["Lighthouses", "Fiction"],
+        "SeriesName": "The Lamp Cycle",
+        "IndexNumber": 1,
+        "Authors": ["Ada Quillfeather"],
+        "ProviderIds": {"Atlas": "atlas:01kdvdna9c000000000000000y", "Isbn": "9780000000118"}
       },
-      "expect_absent": ["PremiereDate", "Overview", "Tags", "Studios"]
+      "expect_absent": ["Tags", "Studios"]
+    },
+    {
+      "name": "book (recorded): year precision gives no premiere date, the narrator is not an author",
+      "kind": "book",
+      "record": "books/record-salt-and-signal.json",
+      "expect": {
+        "Name": "Salt and Signal",
+        "ProductionYear": 2008,
+        "Genres": ["Radio", "Essays"],
+        "Authors": ["Ines Morrow"],
+        "ProviderIds": {"Atlas": "atlas:01kdvdnaaa0000000000000011", "Isbn": "9780000000200"}
+      },
+      "expect_absent": ["PremiereDate", "SeriesName", "IndexNumber", "Studios"]
     },
     {
       "name": "book: a fractional series position is not an index, month precision gives no premiere date, blank author names are dropped",
@@ -77,9 +92,11 @@
     },
     {
       "name": "unknown fields and unknown vocabulary values are ignored, never fatal",
-      "kind": "movie",
+      "kind": "book",
       "record": "forward-compat/record-unknown-members.json",
-      "expect": {"Name": "Forward Compatibility Probe", "ProductionYear": 2011, "PremiereDate": "2011-04-19"}
+      "expect": {"Name": "The Lamp Keeper", "ProductionYear": 2005, "PremiereDate": "2005-08-14"},
+      "expect_absent": ["Authors"],
+      "note": "the only author carries an unknown creator role: kept as another person, never taken for an author"
     }
   ]
 }

@@ -4,42 +4,82 @@
   "min_client_api": "1.0",
   "cases": [
     {
-      "name": "day-precision release date keeps year, month and day",
-      "record": "games/record-portal.json",
+      "name": "day-precision release date keeps year, month and day (recorded record, merge survivor)",
+      "record": "games/record-lanternfall.json",
       "expect": {
-        "Name": "Portal 2",
+        "Name": "Lanternfall (duplicate entry)",
         "ReleaseDate": {
-          "Year": 2011,
-          "Month": 4,
-          "Day": 19
+          "Year": 2019,
+          "Month": 3,
+          "Day": 14
         },
+        "Description": "A short synthetic puzzle game for the Atlas client fixtures.",
         "Developers": [
-          "Valve"
+          "Glowmoth Studio"
+        ],
+        "Publishers": [
+          "Harbour Lights Interactive"
+        ],
+        "Genres": [
+          "Puzzle",
+          "Adventure"
         ],
         "Links": [
           {
             "Name": "Atlas",
-            "Url": "https://atlas.example.org/game/atlas:01m70bhdfwzc60xawvc1avtnv7"
+            "Url": "https://atlas.example.org/game/atlas:01kdvdna5a000000000000000h"
           }
         ]
       },
       "expect_absent": [
-        "Description",
-        "Publishers",
         "Series",
-        "Genres",
         "Tags"
+      ]
+    },
+    {
+      "name": "month precision from a recorded record never gets a day",
+      "record": "games/record-copper-tide.json",
+      "expect": {
+        "Name": "Copper Tide",
+        "ReleaseDate": {
+          "Year": 2021,
+          "Month": 11
+        },
+        "Developers": [
+          "Brassfin Games"
+        ],
+        "Genres": [
+          "Strategy"
+        ]
+      },
+      "expect_absent": [
+        "Description",
+        "Publishers"
+      ]
+    },
+    {
+      "name": "a recorded record of a media type no connector knows (comic) still maps the shared fields",
+      "record": "games/record-unknown-type.json",
+      "expect": {
+        "Name": "Tidepool Tales #1",
+        "Publishers": [
+          "Kelp Street Press"
+        ]
+      },
+      "expect_absent": [
+        "ReleaseDate",
+        "Developers"
       ]
     },
     {
       "name": "unknown fields and unknown vocabulary values are ignored, never fatal",
       "record": "forward-compat/record-unknown-members.json",
       "expect": {
-        "Name": "Forward Compatibility Probe",
+        "Name": "The Lamp Keeper",
         "ReleaseDate": {
-          "Year": 2011,
-          "Month": 4,
-          "Day": 19
+          "Year": 2005,
+          "Month": 8,
+          "Day": 14
         }
       }
     },

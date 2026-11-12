@@ -124,7 +124,40 @@ namespace Atlas.Playnite.Tests
     public static class TestAtlas
     {
         public const string BaseUrl = "https://atlas.example.org/";
-        public const string PortalId = "atlas:01m70bhdfwzc60xawvc1avtnv7";
+        /// <summary>lanternfall in contract/fixtures/MANIFEST.json (the merge survivor of lanternfall-duplicate).</summary>
+        public const string RecordId = "atlas:01kdvdna5a000000000000000h";
+        public const string DuplicateId = "atlas:01kdvdna84000000000000000t";
+        private static readonly IJsonAdapter Json = new NewtonsoftJsonAdapter();
+
+        public static string Record { get { return Repo.Text("contract", "fixtures", "games", "record-lanternfall.json"); } }
+
+        /// <summary>The recorded title (whatever Atlas recorded for the survivor).</summary>
+        public static string Title { get { return Json.Parse(Record)["title"].AsString(); } }
+
+        /// <summary>A one-item /resolve answer: the first result of the recorded games/resolve-by-ids.json (an id match).</summary>
+        public static string ResolveAnswer()
+        {
+            var recorded = Json.Parse(Repo.Text("contract", "fixtures", "games", "resolve-by-ids.json"));
+            var first = recorded["response"]["results"].Items[0];
+            return Json.Write(JsonNode.Object(new[] { new KeyValuePair<string, JsonNode>("results", JsonNode.Array(new[] { first })) }));
+        }
+
+        /// <summary>A /games/batch answer in the client-api 1.0 shape: the record for <see cref="RecordId"/>, not_found for the rest.</summary>
+        public static string BatchAnswer(string requestBody)
+        {
+            var items = new List<JsonNode>();
+            foreach (var id in Json.Parse(requestBody)["ids"].Items)
+            {
+                var known = id.AsString() == RecordId;
+                items.Add(JsonNode.Object(new[]
+                {
+                    new KeyValuePair<string, JsonNode>("requested", id),
+                    new KeyValuePair<string, JsonNode>("status", JsonNode.Str(known ? "ok" : "not_found")),
+                    new KeyValuePair<string, JsonNode>("game", known ? Json.Parse(Record) : JsonNode.Null),
+                }));
+            }
+            return Json.Write(JsonNode.Object(new[] { new KeyValuePair<string, JsonNode>("results", JsonNode.Array(items)) }));
+        }
         public const string Token = "tok-synthetic-0000";
 
         public static string TempDir()
@@ -134,17 +167,18 @@ namespace Atlas.Playnite.Tests
             return d;
         }
 
-        /// <summary>A handler that serves the recorded Portal 2 fixtures like the real routes do.</summary>
-        public static FakeHandler PortalHandler()
+        /// <summary>A handler that serves the recorded connectors-v1 fixtures (client-api 1.0) like the real routes do.</summary>
+        public static FakeHandler RecordHandler()
         {
-            var portal = Repo.Text("contract", "fixtures", "games", "record-portal.json");
+            var record = Record;
             return new FakeHandler()
                 .On("GET", "/api/v2/site", s => FakeHandler.Json(200, Repo.Text("contract", "fixtures", "games", "site.json")))
-                .On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, Repo.Text("contract", "fixtures", "games", "resolve-by-atlas-id.json")))
-                .On("GET", "/api/v2/games/" + PortalId, s =>
+                .On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, ResolveAnswer()))
+                .On("POST", "/api/v2/games/batch", s => FakeHandler.Json(200, BatchAnswer(s.Body)))
+                .On("GET", "/api/v2/games/" + RecordId, s =>
                     s.Header("If-None-Match") == "\"v2\""
                         ? FakeHandler.Json(304, "", "ETag", "\"v2\"")
-                        : FakeHandler.Json(200, portal, "ETag", "\"v2\""));
+                        : FakeHandler.Json(200, record, "ETag", "\"v2\""));
         }
 
         public static AtlasServices Services(FakeHandler handler, string dir, ITokenProtector protector = null, AtlasSettings settings = null)

@@ -141,7 +141,7 @@ namespace Atlas.Playnite
                     var token = await client.PairAsync("Playnite on " + Environment.MachineName, session =>
                     {
                         PairCode = session.UserCode;
-                        PairUrl = session.VerifyUrl;
+                        PairUrl = session.VerifyUrlComplete ?? session.VerifyUrl;   // the approval page with the code filled in
                         Status = "Open the address below on a device where you are signed in to Atlas and approve the code. Only approve a code shown here.";
                     }, _cts.Token).ConfigureAwait(true);
                     _pendingToken = token; _forget = false;

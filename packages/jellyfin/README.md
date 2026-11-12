@@ -52,7 +52,7 @@ different patch level of the same line is **not verified**.
 | Book authors | `authors[]` | as `Author` people; blank names dropped |
 | `ProviderIds["Atlas"]` | Atlas id | shown as an external id on books, movies and series, linked to `<atlas>/game/<id>` (an `IExternalUrlProvider`; the page path is the Playnite package's and is provisional); a merged id is followed and replaced |
 | Book `ProviderIds["Isbn"]` | `provider_ids.isbn` | |
-| Primary / Backdrop / Logo images | artwork | Atlas's `primary` per role, else the preferred one, else the first of that kind (`cover`/`poster` -> Primary). An unknown kind is never guessed into a role |
+| Primary / Backdrop / Logo images | artwork | Atlas's `primary_by_role` (cover, background, logo), else the preferred one, else the first of that kind (`cover`/`poster` -> Primary). An unknown kind is never guessed into a role |
 
 Expected values for 8 cases (books, movie, series, anime, partial dates, unknown members) are in `contract/vectors/jellyfin.json` and are run by the unit
 tests against the real `Book`, `Movie` and `Series` classes.
@@ -99,8 +99,9 @@ the zips, attaches them to a GitHub release and deploys `manifest.json` to Pages
   Jellyfin orders providers and picks among two manifest entries, the Identify dialog and the image picker are all untested. The CI plan
   in CONTRACT-C15 section 12 (start the official Jellyfin container per ABI, scan a fixture tree, assert `ProviderIds.Atlas`) is **not done**:
   neither Docker nor a Jellyfin server was used here.
-- **No real Atlas was contacted.** Tests use a fake HTTP handler over `contract/fixtures`. The `isbn/tmdb/imdb/tvdb/anilist` namespaces, the pairing
-  wire names and book/movie/series records are provisional until Atlas ships client-api (PR A24) and generates the fixtures.
+- **No real Atlas is contacted by these tests.** They use a fake HTTP handler over `contract/fixtures`, which Atlas recorded (client-api 1.0,
+  PR A24): the book records and pairing shapes are real. The `tmdb/imdb/tvdb/anilist` namespaces and movie/series records are still this
+  repository's own vectors (the synthetic seed has no movies or series with those ids). The live lane checks the wire shapes against a real Atlas.
 - Local test runs: the 10.11 (`net9.0`) tests ran on the **.NET 10** runtime through roll-forward, because the ASP.NET Core 9 runtime is not
   installed on the author's machine. CI installs .NET 9 and 10 and runs each ABI on its own runtime; that has not run yet either.
 - The release workflow has not run on GitHub. `upload-pages-artifact@v4` and `deploy-pages@v4` and the Pages setting are unchecked.
