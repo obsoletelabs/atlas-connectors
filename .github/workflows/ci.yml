@@ -28,6 +28,7 @@ jobs:
     outputs:
       python: ${{ steps.sel.outputs.python }}
       contract: ${{ steps.sel.outputs.contract }}
+      dotnet: ${{ steps.sel.outputs.dotnet }}
       live: ${{ steps.sel.outputs.live }}
       packages: ${{ steps.sel.outputs.packages }}
     steps:
@@ -60,6 +61,30 @@ jobs:
       - name: Contract pins hold
         if: needs.gate.outputs.contract == 'true'
         run: python tools/contract_pin.py check
+
+  # The shared C# client and its tests (no network: a fake HTTP handler over contract/fixtures). Also proves the
+  # "compiled in as source" promise: a net462 library takes the sources with Newtonsoft only, at C# 7.3.
+  dotnet:
+    needs: gate
+    if: needs.gate.outputs.dotnet == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Build the client sources (netstandard2.0, C# 7.3, warnings are errors)
+        run: dotnet build dotnet/Atlas.Client -c Release
+      - name: Build the net462 source-consumer check (Newtonsoft only)
+        run: dotnet build dotnet/Atlas.Client.SourceCheck -c Release
+      - name: Test the client against contract/fixtures
+        run: dotnet test dotnet/Atlas.Client.Tests -c Release --logger "trx;LogFileName=atlas-client.trx" --results-directory test-results
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: atlas-client-test-results
+          path: test-results/*.trx
+          if-no-files-found: ignore
 
   # One job per package. The scaffold has no package code yet (X1 Playnite, X2 Jellyfin), so these only prove the
   # path filter and the job wiring. They must be replaced by real build + test steps in those PRs.
@@ -137,7 +162,7 @@ jobs:
 
   # The single required status. A job may be skipped only when the gate did not select it.
   required:
-    needs: [gate, python, package-playnite, package-jellyfin, live-atlas]
+    needs: [gate, python, dotnet, package-playnite, package-jellyfin, live-atlas]
     if: always()
     runs-on: ubuntu-24.04
     steps:

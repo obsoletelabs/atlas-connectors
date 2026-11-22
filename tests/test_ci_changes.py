@@ -35,6 +35,16 @@ def test_shared_paths_select_all(path):
     assert r["packages"] == ALL_SORTED and r["python"] is True and r["contract"] is True
 
 
+def test_dotnet_lane_runs_for_shared_changes_only():
+    assert pick("dotnet/Atlas.Client/Core/AtlasClient.cs")["dotnet"] is True
+    assert pick("contract/fixtures/games/site.json")["dotnet"] is True       # the tests read the fixtures
+    assert pick(".github/workflows/ci.yml")["dotnet"] is True
+    assert pick("packages/playnite/src/Foo.cs")["dotnet"] is False           # a package change does not retest the client
+    assert pick("tests/test_ci_changes.py")["dotnet"] is False
+    assert pick("README.md")["dotnet"] is False
+    assert cc.classify(None, ALL)["dotnet"] is True
+
+
 def test_unknown_path_selects_all():
     assert pick("something/new/thing.bin")["packages"] == ALL_SORTED
 
@@ -42,7 +52,7 @@ def test_unknown_path_selects_all():
 def test_docs_only_selects_nothing():
     r = pick("README.md", "docs/VENDOR-FACTS.md", "CONTRIBUTING.md", ".github/ISSUE_TEMPLATE/bug.yml",
              ".github/PULL_REQUEST_TEMPLATE.md")
-    assert r == {"python": False, "contract": False, "live": False, "packages": []}
+    assert r == {"python": False, "contract": False, "dotnet": False, "live": False, "packages": []}
 
 
 def test_package_readme_at_packages_root_is_docs_like():

@@ -18,7 +18,7 @@ the CI plumbing and the test tooling that the connectors will be built on.
 | `packages/jellyfin` | Jellyfin media server plugin (`IRemoteMetadataProvider`, `IExternalId`, image provider) | books, movies, TV, anime (not games: Jellyfin has no game library) | `jellyfin-v*` | planned (PR X2) |
 | `packages/emby` | Emby plugin | movies, TV, books | `emby-v*` | undecided: a one-day spike decides (D15.17) |
 | `packages/plex` | Plex | movies, TV | `plex-v*` | undecided: a one-day spike decides (D15.17) |
-| `dotnet/Atlas.Client` | shared C# client, compiled into each package as source (not a NuGet dependency) | n/a | not released | planned (PR X0 follow-up) |
+| `dotnet/Atlas.Client` | shared C# client, compiled into each package as source (not a NuGet dependency) | n/a | not released | implemented (PR 2): models, tolerant reader, HTTP retry, wire negotiation, pairing; see `dotnet/README.md` |
 | `contract/` | the Atlas client contract: `CLIENT-CONTRACT.md`, pinned OpenAPI, fixtures, vectors | n/a | `client-contract-v*` | draft (this PR) |
 
 Every package has its own SemVer version and CHANGELOG, declares the `client-api` version it needs (`min_client_api`)
@@ -42,7 +42,7 @@ and its host range, and is released by its own tag.
 ```
 contract/        the client contract (no code): CLIENT-CONTRACT.md, openapi-client-v1.json (placeholder until Atlas
                  generates it), fixtures/, vectors/, SHA256SUMS
-dotnet/          shared C# client + tests (placeholder)
+dotnet/          Atlas.Client (shared C# client, compiled in as source), Atlas.Client.Tests, Atlas.Client.SourceCheck
 packages/        one directory per host (placeholders)
 tools/           ci_changes.py (what a change touches), atlas_testkit.py (real Atlas, seed, read token),
                  contract_pin.py (sha256 pins)
@@ -58,6 +58,7 @@ tests/           offline tests, plus tests/live (needs a real Atlas)
 python -m pip install pytest
 python -m pytest tests -q                 # offline, no network
 python tools/contract_pin.py check
+dotnet test dotnet/Atlas.Client.Tests       # the shared client against contract/fixtures (needs the .NET 10 SDK)
 python tools/atlas_testkit.py run --image <atlas-image> -- python -m pytest tests/live -q   # needs Docker
 ```
 
