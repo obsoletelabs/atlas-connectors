@@ -7,3 +7,5 @@ obj/
 .validation/
 .venv/
 packages/playnite/dist/
+packages/jellyfin/dist/
+packages/jellyfin/**/TestResults/

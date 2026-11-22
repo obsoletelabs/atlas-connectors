@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Atlas metadata provider for Jellyfin. One build per supported ABI: dotnet build -p:JellyfinAbi=10.11 (net9.0) or =12 (net10.0).
+       The Jellyfin.Controller / Jellyfin.Model package version must match the server (plugin template README), so each ABI pins the
+       newest package of its line (abis.json). Atlas.Client is compiled in as SOURCE with the System.Text.Json adapter; the host
+       ships System.Text.Json, so the plugin zip carries only Jellyfin.Plugin.Atlas.dll. -->
+  <PropertyGroup>
+    <JellyfinAbi Condition="'$(JellyfinAbi)' == ''">10.11</JellyfinAbi>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(JellyfinAbi)' == '10.11'">
+    <PluginTfm>net9.0</PluginTfm>
+    <JellyfinPackages>10.11.11</JellyfinPackages>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(JellyfinAbi)' == '12'">
+    <PluginTfm>net10.0</PluginTfm>
+    <JellyfinPackages>12.4.0</JellyfinPackages>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>$(PluginTfm)</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AtlasJson>SystemTextJson</AtlasJson>
+    <RootNamespace>Jellyfin.Plugin.Atlas</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.Atlas</AssemblyName>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591;NU1902;NU1903</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\$(JellyfinAbi)\</OutputPath>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <Import Project="..\..\..\dotnet\Atlas.Client\Atlas.Client.Source.props" />
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinPackages)" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinPackages)" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.Atlas.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Configuration\configPage.html" />
+    <EmbeddedResource Include="Configuration\configPage.html" />
+  </ItemGroup>
+</Project>

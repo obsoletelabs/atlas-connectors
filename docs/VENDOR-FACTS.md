@@ -88,3 +88,21 @@ Jellyfin. Its tests run on `net10.0` against a fake HTTP handler.
 
 What was **not** done: the extension was never loaded by a running Playnite; no Atlas (real or local) was contacted by the
 extension; `Toolbox.exe pack` was never run; Playnite 11 was not looked at.
+
+
+## Facts checked for the Jellyfin package (PR 4), 2026-11-09
+
+| Fact | Result | Evidence |
+|---|---|---|
+| Supported ABIs / frameworks (design notes: 10.10 -> net8.0, 10.11 -> net9.0) | **Corrected.** Current stable Jellyfin is **12.4** (released 2026-10-26; 12.0 on 2026-09-08). NuGet `Jellyfin.Controller` 10.11.x targets **net9.0**, 12.x targets **net10.0**. The live plugin manifest lists `targetAbi` values 10.9.0.0, 10.10.x, 10.11.x and **12.0.0.0, 12.1.0.0, 12.2.0.0**. So the package builds for 10.11 (net9.0) and 12 (net10.0); 10.10/net8.0 is not built. The plugin template on `master` still shows 10.11.5 / net9.0 and a README that says net8.0: it lags | `https://api.github.com/repos/jellyfin/jellyfin/releases`; `https://api.nuget.org/v3-flatcontainer/jellyfin.controller/<ver>/jellyfin.controller.nuspec` (10.11.11, 12.0.0, 12.4.0); `https://lon1.mirror.jellyfin.org/files/plugin/manifest.json` (the `repo.jellyfin.org` URL answers a 302 to this mirror; first 100000 of 201833 characters read) |
+| Server licence | **Mixed signals, unresolved.** The repository `LICENSE` is GPL v2 (text read). The NuGet packages `Jellyfin.Controller` 10.11.11 / 12.x declare **GPL-3.0-only** in their nuspec. Whether the server is "2 only" or "3" for plugin purposes is therefore unclear. A plugin under MIT is compatible with either; AGPL would not be with GPL-2.0-only. The `LICENSING.md` conclusion stands, but its "GPL-2.0" statement is incomplete | `https://raw.githubusercontent.com/jellyfin/jellyfin/master/LICENSE`; nuspec files above |
+| Interfaces `IRemoteMetadataProvider<T,TInfo>`, `IRemoteImageProvider`, `IExternalId` | **Confirmed** from the `release-10.11.z` source and by compiling against the 10.11.11 and 12.4.0 packages. `IExternalId` has `ProviderName`, `Key`, `Type` (`ExternalIdMediaType?`), `Supports(IHasProviderIds)` and no URL member in 10.11. Series lookup type is `MediaBrowser.Controller.Providers.SeriesInfo` (it clashes by name with `Atlas.Client.SeriesInfo`) | `https://raw.githubusercontent.com/jellyfin/jellyfin/release-10.11.z/MediaBrowser.Controller/Providers/*.cs`; `dotnet build` of both ABIs |
+| Package versions must match the server | Re-read from the template README ("otherwise the plugin will show as NotSupported"). Behaviour at a different patch level of the same line is **unverified** | template README |
+| Manifest entry keys and zip layout | **Confirmed** from the `jprm` source: zip `<slug>_<four-part version>.zip` holding the artifacts and `meta.json` (`guid, name, description, overview, owner, category, version, changelog, targetAbi, timestamp`), MD5 of the zip as `checksum`, manifest `versions[]` with `sourceUrl, checksum, timestamp, targetAbi, version, changelog`. Plugin entries may also carry `imageUrl`. `jprm` itself was **not run** | `https://raw.githubusercontent.com/oddstr13/jellyfin-plugin-repository-manager/master/jprm/__init__.py`, via a page summary |
+| `build.yaml` fields | Same as PR 2 (template); `category` value `Metadata` is not checked against a list | template `build.yaml` |
+| Which entry a server picks when several versions match | **Unverified.** The package uses distinct version numbers per ABI (`0.1.0.0` for 10.11, `0.1.0.1` for 12) to avoid the question | |
+| Config page markup (`emby-input`, `Dashboard.showLoadingMsg`, `ApiClient.ajax`) and admin policy name `RequiresElevation` | **Unverified**: written from memory of the template/other plugins, never rendered in a dashboard | |
+| Headless container scan in CI (CONTRACT-C15 12) | **Not attempted**: no Docker/Jellyfin server was used in this step | |
+| Jellyfin uses `System.Text.Json` | The packages compile and the adapter works under the test host; which serializer the server's own API uses was not checked. The plugin only needs that the runtime ships it, which both target frameworks do | |
+
+What was **not** done: no Jellyfin server loaded the plugin; no real Atlas was contacted; `jprm` was not run; the release workflow has not run on GitHub.

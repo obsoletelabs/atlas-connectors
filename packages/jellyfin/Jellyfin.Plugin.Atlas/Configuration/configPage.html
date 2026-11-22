@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Atlas</title>
+</head>
+<body>
+<div id="AtlasConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <h2>Atlas</h2>
+            <p>Metadata and images for books, movies and series from your own Atlas node. This plugin only reads from Atlas.</p>
+            <form id="AtlasForm" autocomplete="off">
+                <div class="inputContainer">
+                    <input is="emby-input" type="url" id="atlasBaseUrl" label="Atlas address" />
+                    <div class="fieldDescription">For example https://atlas.example.org/</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="atlasPlainHttp" />
+                        <span>Allow plain http to a non-local address</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">The token would travel unencrypted. Use only on a trusted network.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="number" id="atlasTtl" label="Keep cached answers (days)" min="0" max="365" />
+                </div>
+                <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="atlasBooks" /><span>Books</span></label></div>
+                <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="atlasMovies" /><span>Movies</span></label></div>
+                <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="atlasSeries" /><span>Series</span></label></div>
+
+                <h3>Read token</h3>
+                <p id="atlasTokenState"></p>
+                <div class="inputContainer">
+                    <input is="emby-input" type="password" id="atlasToken" label="Paste a read token (leave empty to keep the stored one)" autocomplete="new-password" />
+                    <div class="fieldDescription">The token is never shown again after saving.</div>
+                </div>
+                <button is="emby-button" type="button" class="raised" id="atlasPair"><span>Pair with Atlas</span></button>
+                <button is="emby-button" type="button" class="raised" id="atlasForget"><span>Remove stored token</span></button>
+                <p id="atlasPairInfo"></p>
+
+                <div style="margin-top:1.5em">
+                    <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+                    <button is="emby-button" type="button" class="raised block" id="atlasTest"><span>Test connection</span></button>
+                </div>
+                <p id="atlasStatus" role="status"></p>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var page = document.querySelector('#AtlasConfigPage');
+            var forget = false;
+            var pairTimer = null;
+            function el(id) { return page.querySelector('#' + id); }
+            function say(text) { el('atlasStatus').textContent = text; }
+            function call(method, path, body) {
+                var opts = { type: method, url: ApiClient.getUrl('Atlas/' + path), dataType: 'json' };
+                if (body !== undefined) { opts.data = JSON.stringify(body); opts.contentType = 'application/json'; }
+                return ApiClient.ajax(opts);
+            }
+            function tokenState(view) {
+                el('atlasTokenState').textContent = forget ? 'The stored token will be removed when you save.'
+                    : (view.HasToken || view.hasToken ? 'A token is stored (it is not shown).' : 'No token stored (fine only if this Atlas allows public read).');
+            }
+            function load() {
+                Dashboard.showLoadingMsg();
+                call('GET', 'Settings').then(function (v) {
+                    el('atlasBaseUrl').value = v.baseUrl || v.BaseUrl || '';
+                    el('atlasPlainHttp').checked = !!(v.allowPlainHttp || v.AllowPlainHttp);
+                    el('atlasTtl').value = (v.cacheTtlDays !== undefined ? v.cacheTtlDays : v.CacheTtlDays);
+                    el('atlasBooks').checked = !!(v.enableBooks !== undefined ? v.enableBooks : v.EnableBooks);
+                    el('atlasMovies').checked = !!(v.enableMovies !== undefined ? v.enableMovies : v.EnableMovies);
+                    el('atlasSeries').checked = !!(v.enableSeries !== undefined ? v.enableSeries : v.EnableSeries);
+                    tokenState(v);
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+            function save(e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                call('POST', 'Settings', {
+                    baseUrl: el('atlasBaseUrl').value, allowPlainHttp: el('atlasPlainHttp').checked,
+                    cacheTtlDays: parseInt(el('atlasTtl').value || '7', 10),
+                    enableBooks: el('atlasBooks').checked, enableMovies: el('atlasMovies').checked, enableSeries: el('atlasSeries').checked,
+                    token: el('atlasToken').value, forgetToken: forget
+                }).then(function () {
+                    el('atlasToken').value = ''; forget = false; say('Saved.'); Dashboard.hideLoadingMsg(); load();
+                }, function (r) {
+                    Dashboard.hideLoadingMsg();
+                    r.json().then(function (j) { say((j.errors || ['Not saved.']).join(' ')); }, function () { say('Not saved.'); });
+                });
+                return false;
+            }
+            function poll(interval) {
+                pairTimer = setTimeout(function () {
+                    call('POST', 'Pairing/Poll').then(function (r) {
+                        var s = r.status;
+                        if (s === 'approved') { el('atlasPairInfo').textContent = 'Paired. The token is stored.'; load(); }
+                        else if (s === 'denied' || s === 'expired' || s === 'none') { el('atlasPairInfo').textContent = 'Pairing ' + s + '.'; }
+                        else { poll(s === 'slow_down' ? interval + 5000 : interval); }
+                    }, function () { el('atlasPairInfo').textContent = 'Pairing failed.'; });
+                }, interval);
+            }
+            function pair() {
+                clearTimeout(pairTimer);
+                call('POST', 'Pairing/Start').then(function (p) {
+                    var code = p.code || p.Code, url = p.verifyUrl || p.VerifyUrl;
+                    el('atlasPairInfo').textContent = 'Open ' + url + ' on a device where you are signed in to Atlas and approve the code ' + code +
+                        '. Only approve a code shown here.';
+                    poll(Math.max(5, p.intervalSeconds || p.IntervalSeconds || 5) * 1000);
+                }, function (r) { r.json().then(function (j) { el('atlasPairInfo').textContent = (j.errors || ['Pairing failed.']).join(' '); }); });
+            }
+            page.addEventListener('pageshow', load);
+            el('AtlasForm').addEventListener('submit', save);
+            el('atlasPair').addEventListener('click', pair);
+            el('atlasForget').addEventListener('click', function () { forget = true; el('atlasToken').value = ''; el('atlasTokenState').textContent = 'The stored token will be removed when you save.'; });
+            el('atlasTest').addEventListener('click', function () {
+                say('Testing...');
+                call('POST', 'Test').then(function (r) { say(r.message); }, function () { say('Test failed.'); });
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
