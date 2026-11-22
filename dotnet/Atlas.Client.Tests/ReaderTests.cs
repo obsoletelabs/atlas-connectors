@@ -50,45 +50,98 @@ public class ReaderTests
         Assert.Equal("2011-04-19T00:00:00Z", n["d"].AsString());           // a date stays text
     }
 
+    private const string LanternfallId = "atlas:01kdvdna5a000000000000000h";
+    private const string LampKeeperId = "atlas:01kdvdna9c000000000000000y";
+
     [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
-    public void Portal_game_record(string adapter)
+    public void Recorded_game_record(string adapter)
     {
-        var rec = AtlasReader.ReadRecord(Adapters.Make(adapter).Parse(Fixtures.Text("fixtures/games/record-portal.json")));
-        Assert.Equal("atlas:01m70bhdfwzc60xawvc1avtnv7", rec.Id);
-        Assert.Equal("Portal 2", rec.Title);
+        var rec = AtlasReader.ReadRecord(Adapters.Make(adapter).Parse(Fixtures.Text("fixtures/games/record-lanternfall.json")));
+        Assert.Equal(LanternfallId, rec.Id);
+        Assert.Equal(Fixtures.SeedId("lanternfall"), rec.Id);
         Assert.Equal(MediaTypeKind.Game, rec.MediaTypeKind);
-        Assert.Equal("Valve", rec.Developer);
-        Assert.Equal(new PartialDate(2011, 4, 19), rec.FirstRelease);
-        Assert.Equal("620", rec.ProviderIds["steamsync"]);
-        Assert.Equal(2, rec.Version);
+        Assert.Equal("Glowmoth Studio", rec.Developer);
+        Assert.Equal("Harbour Lights Interactive", rec.Publisher);
+        Assert.Equal(new PartialDate(2019, 3, 14), rec.FirstRelease);
+        Assert.Equal(new[] { "Puzzle", "Adventure" }, rec.Subjects);              // a game's genres are its topic words
+        Assert.Equal(5, rec.Version);
         Assert.Null(rec.RedirectedFrom);
+        Assert.Null(rec.Series);
+        Assert.Null(rec.Isbn);
     }
 
     [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
-    public void Book_record_draft(string adapter)
+    public void Recorded_merge_redirect_and_records_alias(string adapter)
     {
-        var rec = AtlasReader.ReadRecord(Adapters.Make(adapter).Parse(Fixtures.Text("fixtures/books/record-synthetic-lighthouse.json")));
+        var j = Adapters.Make(adapter);
+        var redirected = AtlasReader.ReadRecord(j.Parse(Fixtures.Text("fixtures/games/record-redirected.json")));
+        Assert.Equal(LanternfallId, redirected.Id);                                          // store the survivor
+        Assert.Equal(Fixtures.SeedId("lanternfall-duplicate"), redirected.RedirectedFrom);
+        var alias = AtlasReader.ReadRecord(j.Parse(Fixtures.Text("fixtures/games/records-alias-lanternfall.json")));
+        Assert.True(Adapters.Same(alias.Raw, j.Parse(Fixtures.Text("fixtures/games/record-lanternfall.json"))));   // /records == /games
+    }
+
+    [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
+    public void Recorded_book_record(string adapter)
+    {
+        var rec = AtlasReader.ReadRecord(Adapters.Make(adapter).Parse(Fixtures.Text("fixtures/books/record-the-lamp-keeper.json")));
+        Assert.Equal(LampKeeperId, rec.Id);
         Assert.Equal(MediaTypeKind.Book, rec.MediaTypeKind);
-        Assert.Equal(new[] { "Ada Example", "B. Placeholder" }, rec.Authors.Select(a => a.Name));
+        Assert.Equal(new[] { "Ada Quillfeather", "Tomas Vell" }, rec.Authors.Select(a => a.Name));
+        Assert.Equal(new[] { "author", "translator" }, rec.Authors.Select(a => a.Role));
+        Assert.Equal(new[] { true, false }, rec.Authors.Select(a => a.IsAuthor));
         Assert.Equal(2, rec.Editions.Count);
-        Assert.Equal("9780000000019", rec.Editions[1].ProviderIds["isbn"]);
-        Assert.Equal("The Fictional Coast", rec.Series.Name);
-        Assert.Equal("2", rec.Series.Position);
-        Assert.Equal(new PartialDate(1999, null, null), rec.FirstRelease);   // year precision: no month, no day
-        Assert.Equal(DatePrecision.Year, rec.FirstRelease.Value.Precision);
-        Assert.False(rec.AchievementsApplicable);
-        Assert.Contains("Lighthouses", rec.Subjects);
-        Assert.Equal("9780000000002", rec.ProviderIds["isbn"]);
+        Assert.Equal("hardcover", rec.Editions[0].Format);
+        Assert.Equal("9780000000118", rec.Editions[0].Isbn13);
+        Assert.Equal("0000000116", rec.Editions[0].Isbn10);
+        Assert.Equal("Harbour Press", rec.Editions[0].Publisher);
+        Assert.Equal(new PartialDate(2006, 2, null), rec.Editions[1].Published);
+        Assert.Equal("9780000000118", rec.Isbn);                                             // no provider isbn: first edition
+        Assert.Equal("The Lamp Cycle", rec.Series.Name);                                     // from relations.members_of
+        Assert.Equal("1", rec.Series.Position);
+        Assert.Equal(Fixtures.SeedId("series-lamp-cycle"), rec.Series.Id);
+        Assert.Equal(new PartialDate(2005, 8, 14), rec.FirstRelease);
+        Assert.Equal(new[] { "Lighthouses", "Fiction" }, rec.Subjects);                     // Open Library subjects live in features
+        Assert.Equal("fixturebooks", Assert.Single(rec.Sources));
+    }
+
+    [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
+    public void Every_recorded_creator_role_and_edition_format_is_read_never_refused(string adapter)
+    {
+        var j = Adapters.Make(adapter);
+        foreach (var file in Fixtures.AllJson().Where(f => f.StartsWith("fixtures/books/record-", StringComparison.Ordinal)))
+        {
+            var rec = AtlasReader.ReadRecord(j.Parse(Fixtures.Text(file)));
+            Assert.All(rec.Authors, a => Assert.False(string.IsNullOrEmpty(a.Name)));
+            Assert.All(rec.Editions, e => Assert.False(string.IsNullOrEmpty(e.Format)));
+        }
+        var salt = AtlasReader.ReadRecord(j.Parse(Fixtures.Text("fixtures/books/record-salt-and-signal.json")));
+        Assert.Equal(new[] { "author", "narrator" }, salt.Authors.Select(a => a.Role));
+        Assert.Equal("ebook", Assert.Single(salt.Editions).Format);
+        Assert.Equal(new PartialDate(2008, null, null), salt.FirstRelease);
+        var series = AtlasReader.ReadRecord(j.Parse(Fixtures.Text("fixtures/books/record-series-lamp-cycle.json")));
+        Assert.Equal(MediaTypeKind.Series, series.MediaTypeKind);
     }
 
     [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
     public void Unknown_members_and_unknown_vocabulary_are_ignored_and_kept(string adapter)
     {
         var rec = AtlasReader.ReadRecord(Adapters.Make(adapter).Parse(Fixtures.Text("fixtures/forward-compat/record-unknown-members.json")));
-        Assert.Equal("Forward Compatibility Probe", rec.Title);
-        Assert.Equal(new PartialDate(2011, 4, 19), rec.FirstRelease);
-        Assert.Equal("holographic", rec.Raw["platform_family"].AsString());          // unknown vocabulary value: kept as text, no failure
-        Assert.Equal(JsonKind.Object, rec.Raw["a_field_added_in_a_later_minor"].Kind);
+        Assert.Equal("The Lamp Keeper", rec.Title);
+        Assert.Equal(new PartialDate(2005, 8, 14), rec.FirstRelease);
+        Assert.Equal("x_future_format", rec.Editions[0].Format);                          // unknown vocabulary value: kept as text
+        Assert.Equal(JsonKind.Object, rec.Raw["x_future_member"].Kind);                    // unknown member: ignored, still reachable
+        Assert.Equal("9780000000118", rec.Isbn);
+    }
+
+    [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
+    public void A_recorded_media_type_no_connector_knows_reads_as_unknown(string adapter)
+    {
+        var rec = AtlasReader.ReadRecord(Adapters.Make(adapter).Parse(Fixtures.Text("fixtures/games/record-unknown-type.json")));
+        Assert.Equal(MediaTypeKind.Unknown, rec.MediaTypeKind);
+        Assert.Equal("comic", rec.MediaType);
+        Assert.Equal("Kelp Street Press", rec.Publisher);
+        Assert.Null(rec.FirstRelease);
     }
 
     [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
@@ -123,37 +176,69 @@ public class ReaderTests
     public void Search_pages_read_results_or_items(string adapter)
     {
         var j = Adapters.Make(adapter);
-        var games = AtlasReader.ReadSearch(j.Parse(Fixtures.Text("fixtures/games/search-portal.json")));
-        Assert.Equal("Portal 2", Assert.Single(games.Results).Title);
-        var books = AtlasReader.ReadSearch(j.Parse(Fixtures.Text("fixtures/books/search-lighthouse.json")));
-        Assert.Equal(1, books.Total);
-        Assert.Equal(20, books.Limit);
-        Assert.Equal(MediaTypeKind.Book, Assert.Single(books.Results).MediaTypeKind);
+        var games = AtlasReader.ReadSearch(j.Parse(Fixtures.Text("fixtures/games/search-lanternfall.json")));
+        Assert.NotEmpty(games.Results);
+        Assert.All(games.Results, r => Assert.StartsWith("atlas:", r.Id));
+        Assert.Contains(games.Results, r => r.Id == LanternfallId);
+        var byAuthor = AtlasReader.ReadSearch(j.Parse(Fixtures.Text("fixtures/books/search-author.json")));
+        Assert.All(byAuthor.Results, r => Assert.Equal(MediaTypeKind.Book, r.MediaTypeKind));
+        var byIsbn = AtlasReader.ReadSearch(j.Parse(Fixtures.Text("fixtures/books/search-isbn.json")));
+        Assert.Equal(LampKeeperId, Assert.Single(byIsbn.Results).Id);                     // an ISBN answers its book, alone
+        var drafted = AtlasReader.ReadSearch(j.Parse("{\"items\":[{\"id\":\"a\"}],\"total\":1,\"limit\":20}"));
+        Assert.Equal(1, drafted.Total);
+        Assert.Equal(20, drafted.Limit);
+        Assert.Equal("a", Assert.Single(drafted.Results).Id);
     }
 
     [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
     public void Site_with_and_without_client_api(string adapter)
     {
         var j = Adapters.Make(adapter);
-        var today = AtlasReader.ReadSite(j.Parse(Fixtures.Text("fixtures/games/site.json")));
-        Assert.Equal(1, today.Contract);
-        Assert.Null(today.ClientApi);
-        Assert.Contains("game", today.MediaTypes);
-        var a24 = AtlasReader.ReadSite(j.Parse(Rig.SiteWith("{\"version\":\"1.3\",\"min_supported\":\"1.0\",\"capabilities\":[\"books\",\"batch\"],\"deprecations\":[]}")));
-        Assert.Equal(1, a24.ClientApi.Major);
-        Assert.Equal(new[] { "books", "batch" }, a24.ClientApi.Capabilities);
+        var site = AtlasReader.ReadSite(j.Parse(Fixtures.Text("fixtures/games/site.json")));
+        Assert.Equal(1, site.Contract);
+        Assert.Equal("1.0", site.ClientApi.Version);
+        Assert.Equal(1, site.ClientApi.Major);
+        Assert.Equal("1.0", site.ClientApi.MinSupported);
+        Assert.Equal(new[] { "books", "pairing", "etag", "batch" }, site.ClientApi.Capabilities);
+        Assert.Contains("comic", site.MediaTypes);
+        var legacy = AtlasReader.ReadSite(j.Parse(Rig.LegacySite));
+        Assert.Null(legacy.ClientApi);
+        Assert.Contains("game", legacy.MediaTypes);
+        var later = AtlasReader.ReadSite(j.Parse(Rig.SiteWith("{\"version\":\"1.3\",\"min_supported\":\"1.0\",\"capabilities\":[\"books\",\"batch\",\"public_read\"],\"deprecations\":[]}")));
+        Assert.Equal(1, later.ClientApi.Major);
+        Assert.Equal(new[] { "books", "batch", "public_read" }, later.ClientApi.Capabilities);
     }
 
     [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
-    public void Resolve_answer_and_the_auto_assign_rule(string adapter)
+    public void Recorded_resolve_answer_and_the_auto_assign_rule(string adapter)
     {
-        var results = AtlasReader.ReadResolve(Adapters.Make(adapter).Parse(Fixtures.Text("fixtures/games/resolve-by-atlas-id.json")));
-        var r = Assert.Single(results);
-        Assert.Equal("id", r.Reason);
-        Assert.True(r.Assigned);
-        Assert.True(r.CanAutoAssign);
-        Assert.Equal("Portal 2", r.Record.Title);
-        Assert.Single(r.Candidates);
+        var results = AtlasReader.ReadResolve(Adapters.Make(adapter).Parse(Fixtures.Body("fixtures/games/resolve-by-ids.json")));
+        Assert.Equal(5, results.Count);                                                    // one per item, in input order
+        Assert.Equal("crosswalk", results[0].Reason);
+        Assert.True(results[0].CanAutoAssign);
+        Assert.Equal(LanternfallId, results[0].Record.Id);
+        Assert.Equal("redirect", results[1].Reason);                                       // the merged duplicate
+        Assert.True(results[1].CanAutoAssign);
+        Assert.Equal(Fixtures.SeedId("lanternfall-duplicate"), results[1].RedirectedFrom);
+        Assert.Equal(LampKeeperId, results[2].CanonicalId);
+        Assert.Equal(MediaTypeKind.Book, results[2].Record.MediaTypeKind);
+        Assert.False(results[3].CanAutoAssign);                                            // a title alone: a candidate, never assigned
+        Assert.Equal(Fixtures.SeedId("quiet-orbit"), Assert.Single(results[3].Candidates).Id);
+        Assert.Null(results[3].Record);
+        Assert.False(results[4].CanAutoAssign);
+        Assert.Empty(results[4].Candidates);
+    }
+
+    [Theory, MemberData(nameof(Adapters.Both), MemberType = typeof(Adapters))]
+    public void Recorded_batch_answer_skips_not_found_and_follows_merges(string adapter)
+    {
+        var j = Adapters.Make(adapter);
+        var records = AtlasReader.ReadBatch(j.Parse(Fixtures.Body("fixtures/games/batch-mixed.json")));
+        Assert.Equal(new[] { LanternfallId, LanternfallId, Fixtures.SeedId("copper-tide") }, records.Select(r => r.Id));
+        Assert.Equal(Fixtures.SeedId("lanternfall-duplicate"), records[1].RedirectedFrom);
+        Assert.Equal(4, j.Parse(Fixtures.Request("fixtures/games/batch-mixed.json"))["ids"].Items.Count);
+        var future = AtlasReader.ReadBatch(j.Parse("{\"results\":[{\"requested\":\"a\",\"status\":\"forbidden_later\",\"game\":{\"id\":\"a\"}},{\"id\":\"b\"},7]}"));
+        Assert.Equal("b", Assert.Single(future).Id);                                     // unknown status skipped; a bare record still read
     }
 
     [Theory]
@@ -185,22 +270,44 @@ public class ReaderTests
     public void Relations_and_artwork_shapes(string adapter)
     {
         var j = Adapters.Make(adapter);
-        var g = AtlasReader.ReadRelations(j.Parse(Fixtures.Text("fixtures/games/relations-portal.json")));
-        Assert.Equal("Portal 2", Assert.Single(g.Nodes).Title);
+        var g = AtlasReader.ReadRelations(j.Parse(Fixtures.Text("fixtures/games/relations-lanternfall.json")));
+        Assert.Equal(LanternfallId, Assert.Single(g.Nodes).Id);
         Assert.False(g.Truncated);
+
+        var book = AtlasReader.ReadRelations(j.Parse(Fixtures.Text("fixtures/books/relations-the-lamp-keeper.json")));
+        var edge = Assert.Single(book.Edges);
+        Assert.Equal("series_member", edge.Type);
+        Assert.Equal("1", edge.Position);
+        Assert.Equal(LampKeeperId, edge.Source);
+        Assert.Equal(Fixtures.SeedId("series-lamp-cycle"), edge.Target);
+        Assert.Equal(2, book.Editions.Count);
+        Assert.True(book.Truncated);
 
         var edges = AtlasReader.ReadRelations(j.Parse("{\"id\":\"a\",\"nodes\":[],\"edges\":[{\"from\":\"a\",\"to\":\"b\",\"type\":\"series_member\",\"position\":2.5},{\"from\":\"b\",\"to\":\"c\",\"type\":\"future\"}]}"));
         Assert.Equal("2.5", edges.Edges[0].Position);
-        Assert.Equal("series_member", edges.Edges[0].Type);
         Assert.Equal("future", edges.Edges[1].Type);
 
-        var today = AtlasReader.ReadArtwork(j.Parse("{\"id\":\"a\",\"primary\":{\"cover\":{\"id\":\"7\",\"kind\":\"cover\"}},\"results\":[{\"id\":\"7\",\"kind\":\"cover\",\"media_url\":\"/api/v2/media/abc\",\"image_url\":\"/api/v2/artwork/7/image\",\"cached\":true,\"preferred\":true,\"width\":600}]}"));
-        Assert.Equal("7", today.PrimaryByRole["cover"]);
-        Assert.Equal("/api/v2/media/abc", today.Items[0].MediaUrl);
-        Assert.True(today.Items[0].Cached);
-        var a24 = AtlasReader.ReadArtwork(j.Parse("{\"id\":\"a\",\"primary\":{\"cover\":\"7\",\"icon\":9},\"items\":[]}"));
-        Assert.Equal("7", a24.PrimaryByRole["cover"]);
-        Assert.Equal("9", a24.PrimaryByRole["icon"]);
+        // client-api 1.0: primary_by_role is role -> id; `primary` is keyed by KIND and must not be taken for roles
+        var art = AtlasReader.ReadArtwork(j.Parse(Fixtures.Text("fixtures/games/artwork-lanternfall.json")));
+        Assert.Equal(new[] { "background", "cover", "icon", "logo" }, art.PrimaryByRole.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal("key_art", art.Items.Single(a => a.Id == art.PrimaryByRole["cover"]).Kind);
+        Assert.Equal("hero", art.Items.Single(a => a.Id == art.PrimaryByRole["background"]).Kind);
+        Assert.False(art.PrimaryByRole.ContainsKey("key_art"));
+        Assert.All(art.Items, a => Assert.StartsWith("/api/v2/artwork/", a.ImageUrl));
+        var bookArt = AtlasReader.ReadArtwork(j.Parse(Fixtures.Text("fixtures/books/artwork-the-lamp-keeper.json")));
+        Assert.Equal(new[] { "cover" }, bookArt.PrimaryByRole.Keys);                       // null roles are absent, not ""
+        Assert.Equal("poster", bookArt.Items.Single(a => a.Id == bookArt.PrimaryByRole["cover"]).Kind);
+
+        // an Atlas without primary_by_role: `primary` is the fallback (objects or ids)
+        var older = AtlasReader.ReadArtwork(j.Parse("{\"id\":\"a\",\"primary\":{\"cover\":{\"id\":\"7\",\"kind\":\"cover\"}},\"results\":[{\"id\":\"7\",\"kind\":\"cover\",\"media_url\":\"/api/v2/media/abc\",\"image_url\":\"/api/v2/artwork/7/image\",\"cached\":true,\"preferred\":true,\"width\":600}]}"));
+        Assert.Equal("7", older.PrimaryByRole["cover"]);
+        Assert.Equal("/api/v2/media/abc", older.Items[0].MediaUrl);
+        Assert.True(older.Items[0].Cached);
+        var ids = AtlasReader.ReadArtwork(j.Parse("{\"id\":\"a\",\"primary\":{\"cover\":\"7\",\"icon\":9},\"items\":[]}"));
+        Assert.Equal("9", ids.PrimaryByRole["icon"]);
+        var both = AtlasReader.ReadArtwork(j.Parse("{\"primary\":{\"cover\":\"kind-pick\"},\"primary_by_role\":{\"cover\":\"role-pick\",\"logo\":null},\"results\":[]}"));
+        Assert.Equal("role-pick", both.PrimaryByRole["cover"]);
+        Assert.False(both.PrimaryByRole.ContainsKey("logo"));
     }
 
     [Theory]

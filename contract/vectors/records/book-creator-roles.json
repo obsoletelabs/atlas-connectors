@@ -1,0 +1,44 @@
+{
+  "authors": [
+    {
+      "name": "Ada Example",
+      "role": "author"
+    },
+    {
+      "name": "Cal Example"
+    },
+    {
+      "name": "Dee Example",
+      "role": "illustrator"
+    },
+    {
+      "name": "Eve Example",
+      "role": "editor"
+    },
+    {
+      "name": "Fay Example",
+      "role": "translator"
+    },
+    {
+      "name": "Gil Example",
+      "role": "narrator"
+    },
+    {
+      "name": "Hal Example",
+      "role": "colourist"
+    }
+  ],
+  "developer": "ada example",
+  "first_release": {
+    "date": "2011",
+    "precision": "year"
+  },
+  "id": "atlas:00000000000000000000000016",
+  "media_type": "book",
+  "provider_ids": {},
+  "publisher": "Example Press",
+  "redirected_from": null,
+  "subjects": [],
+  "title": "Synthetic Many Hands",
+  "version": 1
+}

@@ -35,10 +35,10 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void Steam_id_is_sent_as_identity_with_the_token_in_a_header_only()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             var p = Provider(h, SteamPortal());
 
-            Assert.Equal("Portal 2", p.GetName(Args));
+            Assert.Equal(TestAtlas.Title, p.GetName(Args));
             var resolve = h.Requests.Single(r => r.Uri.AbsolutePath.EndsWith("/resolve"));
             Assert.Contains("\"steamsync\"", resolve.Body);
             Assert.Contains("\"620\"", resolve.Body);
@@ -52,21 +52,24 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void Fields_come_from_the_record_and_a_day_precision_date_stays_a_day()
         {
-            var p = Provider(TestAtlas.PortalHandler(), SteamPortal());
+            var p = Provider(TestAtlas.RecordHandler(), SteamPortal());
             var date = p.GetReleaseDate(Args).Value;
-            Assert.Equal(new[] { 2011, 4, 19 }, new[] { date.Year, date.Month.Value, date.Day.Value });
-            Assert.Equal("Valve", ((MetadataNameProperty)p.GetDevelopers(Args).Single()).Name);
-            Assert.Equal("https://atlas.example.org/game/" + TestAtlas.PortalId, p.GetLinks(Args).Single().Url);
+            Assert.Equal(new[] { 2019, 3, 14 }, new[] { date.Year, date.Month.Value, date.Day.Value });
+            Assert.Equal("Glowmoth Studio", ((MetadataNameProperty)p.GetDevelopers(Args).Single()).Name);
+            Assert.Equal("Harbour Lights Interactive", ((MetadataNameProperty)p.GetPublishers(Args).Single()).Name);
+            Assert.Equal(new[] { "Puzzle", "Adventure" }, p.GetGenres(Args).Select(g => ((MetadataNameProperty)g).Name).ToArray());
+            Assert.Equal("https://atlas.example.org/game/" + TestAtlas.RecordId, p.GetLinks(Args).Single().Url);
             Assert.Contains(MetadataField.Name, p.AvailableFields);
             Assert.Contains(MetadataField.Links, p.AvailableFields);
-            Assert.DoesNotContain(MetadataField.Publishers, p.AvailableFields);
-            Assert.Null(p.GetPublishers(Args));
+            Assert.Contains(MetadataField.Publishers, p.AvailableFields);
+            Assert.DoesNotContain(MetadataField.Series, p.AvailableFields);   // the record has none
+            Assert.Null(p.GetSeries(Args));
         }
 
         [Fact]
         public void Title_only_never_assigns_in_a_background_download()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, FuzzyAnswer()));
             var g = new Game("portal two") { PluginId = Guid.NewGuid(), GameId = "x" };
             var chooserCalled = false;
@@ -84,39 +87,74 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void Title_only_in_a_manual_download_offers_candidates_and_applies_only_the_users_choice()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, FuzzyAnswer()));
-            h.On("POST", "/api/v2/games/batch", s => FakeHandler.Json(404, "{}"));   // no batch capability on this fixture site
             IReadOnlyList<Candidate> shown = null;
             var g = new Game("portal two") { PluginId = Guid.NewGuid(), GameId = "x" };
             var p = Provider(h, g, background: false, chooser: c => { shown = c; return c[0]; });
 
-            Assert.Equal("Portal 2", p.GetName(Args));
-            Assert.Equal(TestAtlas.PortalId, shown.Single().Id);
-            Assert.Equal("Portal 2", shown.Single().Title);
+            Assert.Equal(TestAtlas.Title, p.GetName(Args));
+            Assert.Equal(TestAtlas.RecordId, shown.Single().Id);
+            Assert.Equal(TestAtlas.Title, shown.Single().Title);
         }
 
         [Fact]
         public void The_user_can_decline_every_candidate()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, FuzzyAnswer()));
             var p = Provider(h, new Game("portal two") { PluginId = Guid.NewGuid(), GameId = "x" }, false, c => null);
             Assert.Null(p.GetName(Args));
+        }
+
+        [Fact]
+        public void A_merged_away_candidate_id_is_offered_as_its_survivor_and_only_once()
+        {
+            // Regression: candidates were matched with x.Id == id, so a merged-away id (answered by its survivor) was dropped and a
+            // lookup whose only candidate had been merged came back NotFound. Uses the recorded merge in batch-mixed.json.
+            const string merged = "atlas:01kdvdna84000000000000000t";           // lanternfall-duplicate, merged into RecordId
+            var h = TestAtlas.RecordHandler();
+            h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, "{\"results\":[{\"canonical_id\":null,\"reason\":\"ambiguous\",\"tier\":\"weak\","
+                + "\"method\":\"none\",\"confidence\":0.5,\"candidates\":[{\"id\":\"" + merged + "\",\"score\":0.6},{\"id\":\"" + TestAtlas.RecordId + "\",\"score\":0.5}]}]}"));
+            var redirected = Repo.Text("contract", "fixtures", "games", "record-redirected.json");
+            var batch = "{\"results\":[{\"requested\":\"" + merged + "\",\"status\":\"ok\",\"game\":" + redirected + "},"
+                        + "{\"requested\":\"" + TestAtlas.RecordId + "\",\"status\":\"ok\",\"game\":" + TestAtlas.Record + "}]}";
+            h.On("POST", "/api/v2/games/batch", s => FakeHandler.Json(200, batch));
+            IReadOnlyList<Candidate> shown = null;
+            var p = Provider(h, new Game("lanternfall") { PluginId = Guid.NewGuid(), GameId = "x" }, background: false, chooser: c => { shown = c; return c[0]; });
+
+            Assert.Equal(TestAtlas.Title, p.GetName(Args));
+            Assert.Equal(TestAtlas.RecordId, shown.Single().Id);
+        }
+
+        [Fact]
+        public void A_lone_merged_away_candidate_is_still_offered()
+        {
+            const string merged = "atlas:01kdvdna84000000000000000t";
+            var h = TestAtlas.RecordHandler();
+            h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, "{\"results\":[{\"canonical_id\":null,\"reason\":\"ambiguous\",\"tier\":\"weak\","
+                + "\"method\":\"none\",\"confidence\":0.5,\"candidates\":[{\"id\":\"" + merged + "\",\"score\":0.6}]}]}"));
+            // a survivor answered without redirected_from: only `requested` names the merged id
+            h.On("POST", "/api/v2/games/batch", s => FakeHandler.Json(200, "{\"results\":[{\"requested\":\"" + merged + "\",\"status\":\"ok\",\"game\":" + TestAtlas.Record + "}]}"));
+            var p = Provider(h, new Game("lanternfall") { PluginId = Guid.NewGuid(), GameId = "x" }, background: true);
+
+            Assert.Null(p.GetName(Args));
+            Assert.Equal(LookupOutcome.Candidates, p.Result.Outcome);
+            Assert.Equal(TestAtlas.RecordId, p.Result.Candidates.Single().Id);
         }
 
         // Atlas answers reason "exact", assigned true, for an exact TITLE match (atlas/resolve.py title evidence). C15 8.4: a title
         // is never an automatic match, so a background download applies nothing, and a manual one offers that id to the user.
         private static string ExactTitleAnswer()
         {
-            return "{\"results\":[{\"assigned\":true,\"canonical_id\":\"" + TestAtlas.PortalId + "\",\"reason\":\"exact\",\"method\":\"exact\","
+            return "{\"results\":[{\"assigned\":true,\"canonical_id\":\"" + TestAtlas.RecordId + "\",\"reason\":\"exact\",\"method\":\"exact\","
                  + "\"confidence\":1.0,\"candidates\":[]}]}";
         }
 
         [Fact]
         public void An_exact_title_match_is_never_applied_by_a_background_download()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, ExactTitleAnswer()));
             var chooserCalled = false;
             var p = Provider(h, new Game("Portal 2") { PluginId = Guid.NewGuid(), GameId = "x" }, background: true, chooser: c => { chooserCalled = true; return c[0]; });
@@ -130,20 +168,19 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void An_exact_title_match_is_offered_to_the_user_in_a_manual_download()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, ExactTitleAnswer()));
-            h.On("POST", "/api/v2/games/batch", s => FakeHandler.Json(404, "{}"));
             IReadOnlyList<Candidate> shown = null;
             var p = Provider(h, new Game("Portal 2") { PluginId = Guid.NewGuid(), GameId = "x" }, background: false, chooser: c => { shown = c; return c[0]; });
 
-            Assert.Equal("Portal 2", p.GetName(Args));
-            Assert.Equal(TestAtlas.PortalId, shown.Single().Id);
+            Assert.Equal(TestAtlas.Title, p.GetName(Args));
+            Assert.Equal(TestAtlas.RecordId, shown.Single().Id);
         }
 
         [Fact]
         public void A_cancelled_download_gives_no_fields_and_no_exception()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             var p = Provider(h, SteamPortal());
             using (var cts = new CancellationTokenSource())
             {
@@ -161,22 +198,22 @@ namespace Atlas.Playnite.Tests
         private static string FuzzyAnswer()
         {
             return "{\"results\":[{\"assigned\":false,\"canonical_id\":null,\"reason\":\"fuzzy\",\"method\":\"title\",\"confidence\":0.6,"
-                 + "\"candidates\":[{\"id\":\"" + TestAtlas.PortalId + "\",\"score\":0.6}]}]}";
+                 + "\"candidates\":[{\"id\":\"" + TestAtlas.RecordId + "\",\"score\":0.6}]}]}";
         }
 
         [Fact]
         public void A_known_atlas_link_skips_resolve_and_a_second_run_sends_the_etag()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             var g = SteamPortal();
-            g.Links = new System.Collections.ObjectModel.ObservableCollection<Link>(new[] { AtlasLinks.RecordLink(TestAtlas.BaseUrl, TestAtlas.PortalId) });
+            g.Links = new System.Collections.ObjectModel.ObservableCollection<Link>(new[] { AtlasLinks.RecordLink(TestAtlas.BaseUrl, TestAtlas.RecordId) });
             var services = TestAtlas.Services(h, _dir);
 
-            Assert.Equal("Portal 2", Provider(h, g, services: services).GetName(Args));
-            Assert.Equal("Portal 2", Provider(h, g, services: services).GetName(Args));
+            Assert.Equal(TestAtlas.Title, Provider(h, g, services: services).GetName(Args));
+            Assert.Equal(TestAtlas.Title, Provider(h, g, services: services).GetName(Args));
 
             Assert.DoesNotContain(h.Requests, r => r.Uri.AbsolutePath.EndsWith("/resolve"));
-            var gets = h.Requests.Where(r => r.Uri.AbsolutePath.EndsWith("/games/" + TestAtlas.PortalId)).ToList();
+            var gets = h.Requests.Where(r => r.Uri.AbsolutePath.EndsWith("/games/" + TestAtlas.RecordId)).ToList();
             Assert.Equal(2, gets.Count);
             Assert.Null(gets[0].Header("If-None-Match"));
             Assert.Equal("\"v2\"", gets[1].Header("If-None-Match"));    // 304 answered from the cached copy
@@ -185,28 +222,27 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void A_merged_id_is_followed_and_the_new_id_goes_into_the_link()
         {
-            var h = TestAtlas.PortalHandler();
-            var merged = Repo.Text("contract", "fixtures", "games", "record-portal.json")
-                .Replace("\"redirected_from\": null", "\"redirected_from\": \"atlas:0old\"");
-            h.On("GET", "/api/v2/games/atlas:0old", s => FakeHandler.Json(200, merged));
+            var h = TestAtlas.RecordHandler();
+            // the recorded answer for the merged duplicate: the survivor, with redirected_from
+            h.On("GET", "/api/v2/games/" + TestAtlas.DuplicateId, s => FakeHandler.Json(200, Repo.Text("contract", "fixtures", "games", "record-redirected.json")));
             var g = SteamPortal();
-            g.Links = new System.Collections.ObjectModel.ObservableCollection<Link>(new[] { AtlasLinks.RecordLink(TestAtlas.BaseUrl, "atlas:0old") });
+            g.Links = new System.Collections.ObjectModel.ObservableCollection<Link>(new[] { AtlasLinks.RecordLink(TestAtlas.BaseUrl, TestAtlas.DuplicateId) });
             var p = Provider(h, g);
 
-            Assert.Equal("https://atlas.example.org/game/" + TestAtlas.PortalId, p.GetLinks(Args).Single().Url);
+            Assert.Equal("https://atlas.example.org/game/" + TestAtlas.RecordId, p.GetLinks(Args).Single().Url);
             Assert.True(p.Result.IdChanged);
         }
 
         [Fact]
         public void When_atlas_is_down_a_record_within_the_ttl_is_served_and_nothing_older()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             var services = TestAtlas.Services(h, _dir);
-            Assert.Equal("Portal 2", Provider(h, SteamPortal(), services: services).GetName(Args));
+            Assert.Equal(TestAtlas.Title, Provider(h, SteamPortal(), services: services).GetName(Args));
 
             h.Offline = true;
             var offline = Provider(h, SteamPortal(), services: TestAtlas.Services(h, _dir, settings: new AtlasSettings { BaseUrl = TestAtlas.BaseUrl, CacheTtlDays = 7 }));
-            Assert.Equal("Portal 2", offline.GetName(Args));
+            Assert.Equal(TestAtlas.Title, offline.GetName(Args));
             Assert.True(offline.Result.FromCache);
 
             var expired = Provider(h, SteamPortal(), services: TestAtlas.Services(h, _dir, settings: new AtlasSettings { BaseUrl = TestAtlas.BaseUrl, CacheTtlDays = 0 }));
@@ -227,7 +263,7 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void A_rejected_token_gives_a_message_not_an_exception()
         {
-            var h = TestAtlas.PortalHandler();
+            var h = TestAtlas.RecordHandler();
             h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(401, "{\"error\":{\"code\":\"unauthorized\",\"message\":\"no\"}}"));
             var p = Provider(h, SteamPortal());
             Assert.Null(p.GetName(Args));
@@ -237,8 +273,9 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void A_non_game_record_is_never_applied_to_a_game()
         {
-            var h = TestAtlas.PortalHandler();
-            var movie = Repo.Text("contract", "fixtures", "games", "resolve-by-atlas-id.json").Replace("\"media_type\": \"game\"", "\"media_type\": \"movie\"");
+            var h = TestAtlas.RecordHandler();
+            var movie = TestAtlas.ResolveAnswer().Replace("\"media_type\":\"game\"", "\"media_type\":\"movie\"");
+            Assert.Contains("\"movie\"", movie);
             h.On("POST", "/api/v2/resolve", s => FakeHandler.Json(200, movie));
             var p = Provider(h, SteamPortal());
             Assert.Null(p.GetName(Args));
@@ -247,7 +284,7 @@ namespace Atlas.Playnite.Tests
         // ---- images ----------------------------------------------------------------------------------------------
 
         private const string ArtworkJson =
-            "{\"id\":\"" + TestAtlas.PortalId + "\",\"items\":["
+            "{\"id\":\"" + TestAtlas.RecordId + "\",\"items\":["
             + "{\"id\":\"a1\",\"kind\":\"cover\",\"preferred\":true,\"cached\":true,\"media_url\":\"/media/abc123\"},"
             + "{\"id\":\"a2\",\"kind\":\"background\",\"preferred\":true,\"image_url\":\"/api/v2/artwork/a2/image\"},"
             + "{\"id\":\"a3\",\"kind\":\"holo-poster-from-the-future\",\"preferred\":true}],"
@@ -256,8 +293,8 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void Cover_comes_from_the_public_media_url_without_the_token()
         {
-            var h = TestAtlas.PortalHandler();
-            h.On("GET", "/api/v2/games/" + TestAtlas.PortalId + "/artwork", s => FakeHandler.Json(200, ArtworkJson));
+            var h = TestAtlas.RecordHandler();
+            h.On("GET", "/api/v2/games/" + TestAtlas.RecordId + "/artwork", s => FakeHandler.Json(200, ArtworkJson));
             h.On("GET", "/media/abc123", s => FakeHandler.Bytes(new byte[] { 1, 2, 3, 4 }, "image/png"));
             var p = Provider(h, SteamPortal());
 
@@ -273,8 +310,8 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void A_307_to_another_host_never_carries_the_authorization_header()
         {
-            var h = TestAtlas.PortalHandler();
-            h.On("GET", "/api/v2/games/" + TestAtlas.PortalId + "/artwork", s => FakeHandler.Json(200, ArtworkJson));
+            var h = TestAtlas.RecordHandler();
+            h.On("GET", "/api/v2/games/" + TestAtlas.RecordId + "/artwork", s => FakeHandler.Json(200, ArtworkJson));
             h.On("GET", "/api/v2/artwork/a2/image", s => FakeHandler.Redirect(307, "https://images.other.example/bg.jpg"));
             h.OnHost("images.other.example", s => FakeHandler.Bytes(new byte[] { 9, 9 }, "image/jpeg"));
             var p = Provider(h, SteamPortal());
@@ -290,10 +327,26 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void A_failed_image_download_gives_no_image_and_no_exception()
         {
-            var h = TestAtlas.PortalHandler();
-            h.On("GET", "/api/v2/games/" + TestAtlas.PortalId + "/artwork", s => FakeHandler.Json(200, ArtworkJson));
+            var h = TestAtlas.RecordHandler();
+            h.On("GET", "/api/v2/games/" + TestAtlas.RecordId + "/artwork", s => FakeHandler.Json(200, ArtworkJson));
             h.On("GET", "/media/abc123", s => FakeHandler.Json(404, "{}"));
             Assert.Null(Provider(h, SteamPortal()).GetCoverImage(Args));
+        }
+
+        [Fact]
+        public void The_recorded_artwork_answer_picks_by_role_not_by_kind()
+        {
+            var h = TestAtlas.RecordHandler();
+            h.On("GET", "/api/v2/games/" + TestAtlas.RecordId + "/artwork", s => FakeHandler.Json(200, Repo.Text("contract", "fixtures", "games", "artwork-lanternfall.json")));
+            h.On("GET", "/api/v2/artwork/01KDVDNAE2000000000000001D/image", s => FakeHandler.Bytes(new byte[] { 7 }, "image/png"));   // key_art, ranked cover
+            h.On("GET", "/api/v2/artwork/01KDVDNAEP000000000000001F/image", s => FakeHandler.Bytes(new byte[] { 8 }, "image/png"));   // icon
+            var p = Provider(h, SteamPortal());
+
+            Assert.Equal(new byte[] { 7 }, p.GetCoverImage(Args).Content);
+            Assert.Equal(new byte[] { 8 }, p.GetIcon(Args).Content);
+            Assert.Contains(MetadataField.BackgroundImage, p.AvailableFields);              // the hero, ranked background
+            Assert.All(h.Requests.Where(r => r.Uri.AbsolutePath.Contains("/artwork/") && r.Uri.AbsolutePath.EndsWith("/image")),
+                r => Assert.Equal("Bearer " + TestAtlas.Token, r.Header("Authorization")));
         }
 
         [Fact]

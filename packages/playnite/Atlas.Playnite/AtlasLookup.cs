@@ -158,10 +158,12 @@ namespace Atlas.Playnite
             if (ids.Count == 0) return new LookupResult { Outcome = LookupOutcome.NotFound };
             var records = await _client.GetRecordsAsync(ids, ct).ConfigureAwait(false);
             var list = new List<Candidate>();
+            var listed = new HashSet<string>(StringComparer.Ordinal);
             foreach (var id in ids)
             {
-                var r = records.FirstOrDefault(x => x.Id == id);
-                if (r == null || !IsGame(r)) continue;
+                // a candidate id that was merged away answers its survivor (RedirectedFrom); two ids on one survivor list it once
+                var r = records.FirstOrDefault(x => x.Answers(id));
+                if (r == null || !IsGame(r) || !listed.Add(r.Id)) continue;
                 list.Add(new Candidate { Id = r.Id, Title = r.Title, Detail = r.FirstRelease.HasValue ? r.FirstRelease.Value.ToString() : null });
             }
             return list.Count == 0 ? new LookupResult { Outcome = LookupOutcome.NotFound } : new LookupResult { Outcome = LookupOutcome.Candidates, Candidates = list };
@@ -256,7 +258,8 @@ namespace Atlas.Playnite
         }
 
         /// <summary>
-        /// The artwork Atlas ranks first for a role (<c>primary</c>, A24), else the one flagged preferred, else the first of that kind.
+        /// The artwork Atlas ranks first for a role (<c>primary_by_role</c>, client-api 1.0), else the one flagged preferred, else the
+        /// first of that kind.
         /// <paramref name="kinds"/> are tried in order (cover then poster). An unknown kind is never picked.
         /// </summary>
         public static Artwork Pick(ArtworkList list, params string[] kinds)

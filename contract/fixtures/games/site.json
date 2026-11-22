@@ -1,4 +1,19 @@
 {
+  "client_api": {
+    "capabilities": [
+      "books",
+      "pairing",
+      "etag",
+      "batch"
+    ],
+    "deprecations": [],
+    "limits": {
+      "anonymous_items": 25,
+      "batch_items": 200
+    },
+    "min_supported": "1.0",
+    "version": "1.0"
+  },
   "contract": 1,
   "email_verification": "optional",
   "kind": "local",
@@ -8,11 +23,13 @@
     "movie",
     "tv_show",
     "series",
-    "collection"
+    "collection",
+    "book",
+    "comic"
   ],
   "name": "Atlas",
   "nav_links": [],
-  "node_id": "24f2769d91deb038",
+  "node_id": "0123456789abcdef",
   "operator": "",
   "registration": "open",
   "role": "local",

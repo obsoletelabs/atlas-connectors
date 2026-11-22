@@ -18,3 +18,10 @@ First version.
 - Offline: a cached record is used for up to 7 days when Atlas cannot be reached.
 - Builds for Jellyfin 10.11 (`net9.0`, targetAbi 10.11.0.0) and Jellyfin 12 (`net10.0`, targetAbi 12.0.0.0).
 - Reads only. Never writes to Atlas.
+- client-api 1.0 (Atlas A24): the ISBN comes from `provider_ids.isbn` or the first edition's `isbn_13`; only creators with the role `author`
+  are authors (translators, illustrators and editors get their own person kinds, other roles are kept as Unknown); the series comes from
+  the record's relations; a book's `developer` (its author) is no longer shown as a studio; images use `primary_by_role`; the pairing link
+  is `verify_url_complete`.
+- ISBN identity: the ISBN is sent as the bare ISBN-13 Atlas keys its `isbn` crosswalk by (ISBN-10 and hyphenated forms converted, invalid
+  ones dropped), and a book that resolve does not match is looked up by `GET /games?q=<isbn>&type=book` (one book answer only).
+- Identify lists a merged record once, even when several candidate ids were merged into it.

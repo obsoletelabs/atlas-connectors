@@ -115,20 +115,20 @@ namespace Atlas.Playnite.Tests
         [Fact]
         public void Book_subjects_become_genres_and_the_book_is_not_a_game()
         {
-            var rec = AtlasReader.ReadRecord(Json.Parse(Repo.Text("contract", "fixtures", "books", "record-synthetic-lighthouse.json")));
+            var rec = AtlasReader.ReadRecord(Json.Parse(Repo.Text("contract", "fixtures", "books", "record-salt-and-signal.json")));
             Assert.Equal(MediaTypeKind.Book, rec.MediaTypeKind);
             var meta = GameMapper.Map(rec, "https://atlas.example.org/");
-            Assert.Equal(new[] { "Fiction", "Lighthouses" }, meta.Genres.Select(p => ((MetadataNameProperty)p).Name).ToArray());
-            Assert.Equal(1999, meta.ReleaseDate.Value.Year);
+            Assert.Equal(new[] { "Radio", "Essays" }, meta.Genres.Select(p => ((MetadataNameProperty)p).Name).ToArray());
+            Assert.Equal(2008, meta.ReleaseDate.Value.Year);
             Assert.Null(meta.ReleaseDate.Value.Month);
         }
 
         [Fact]
         public void Atlas_link_round_trips_and_other_links_are_not_taken_for_ids()
         {
-            var link = AtlasLinks.RecordLink("https://atlas.example.org", TestAtlas.PortalId);
-            Assert.Equal("https://atlas.example.org/game/atlas:01m70bhdfwzc60xawvc1avtnv7", link.Url);
-            Assert.Equal(TestAtlas.PortalId, AtlasLinks.IdFromLink(link, "https://atlas.example.org/"));
+            var link = AtlasLinks.RecordLink("https://atlas.example.org", TestAtlas.RecordId);
+            Assert.Equal("https://atlas.example.org/game/atlas:01kdvdna5a000000000000000h", link.Url);
+            Assert.Equal(TestAtlas.RecordId, AtlasLinks.IdFromLink(link, "https://atlas.example.org/"));
             Assert.Null(AtlasLinks.IdFromLink(link, "https://other.example.org/"));
             Assert.Null(AtlasLinks.IdFromLink(new Link("Website", link.Url), "https://atlas.example.org/"));
             Assert.Null(AtlasLinks.IdFromLink(new Link("Atlas", "https://atlas.example.org/game/not-an-atlas-id"), "https://atlas.example.org/"));

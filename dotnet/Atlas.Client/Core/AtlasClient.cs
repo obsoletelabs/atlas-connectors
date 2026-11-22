@@ -168,7 +168,8 @@ namespace Atlas.Client
 
         /// <summary>
         /// Many records. With the <c>batch</c> capability this is <c>POST /games/batch</c> (at most 200 ids per call); on an Atlas
-        /// without it, one GET per id. Ids Atlas does not know are simply absent from the result.
+        /// without it, one GET per id. Ids Atlas does not know (<c>not_found</c>) are simply absent from the result; a merged id
+        /// answers the surviving record (with <see cref="AtlasRecord.RedirectedFrom"/>), so two ids can give the same record.
         /// </summary>
         public async Task<IReadOnlyList<AtlasRecord>> GetRecordsAsync(IEnumerable<string> ids, CancellationToken ct = default(CancellationToken))
         {
@@ -188,9 +189,7 @@ namespace Atlas.Client
                     foreach (var c in chunk) idNodes.Add(JsonNode.Str(c));
                     var body = JsonNode.Object(new[] { new KeyValuePair<string, JsonNode>("ids", JsonNode.Array(idNodes)) });
                     var reply = await SendAsync(new Req { Method = HttpMethod.Post, Path = "games/batch", Body = body, Retryable = true }, ct).ConfigureAwait(false);
-                    var root = Parse(reply);
-                    var list = root["results"].Kind == JsonKind.Array ? root["results"] : root["items"];
-                    foreach (var n in list.Items) { var r = AtlasReader.ReadRecord(n); if (r != null) all.Add(r); }
+                    all.AddRange(AtlasReader.ReadBatch(Parse(reply)));
                 }
             }
             else

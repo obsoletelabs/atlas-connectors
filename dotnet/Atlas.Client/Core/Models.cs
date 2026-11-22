@@ -86,11 +86,23 @@ namespace Atlas.Client
     {
         public string Name { get; set; }
         public string Id { get; set; }
+        /// <summary>The creator role as Atlas sends it (<c>author</c>, <c>translator</c>, <c>narrator</c>, ...); null when Atlas did
+        /// not say, which means author. A role this client does not know is kept as text.</summary>
+        public string Role { get; set; }
+        /// <summary>True for <c>author</c> or no role: the people who wrote the work (not translators, narrators, editors).</summary>
+        public bool IsAuthor => Role == null || string.Equals(Role, "author", StringComparison.Ordinal);
     }
 
     public sealed class Edition
     {
         public string Name { get; set; }
+        /// <summary>The <c>book_format</c> word (<c>paperback</c>, <c>hardcover</c>, <c>ebook</c>, ...); unknown words are kept as text.</summary>
+        public string Format { get; set; }
+        public string Isbn13 { get; set; }
+        public string Isbn10 { get; set; }
+        public string Language { get; set; }
+        public string Publisher { get; set; }
+        public PartialDate? Published { get; set; }
         public IReadOnlyDictionary<string, string> ProviderIds { get; set; } = EmptyMap.Instance;
     }
 
@@ -99,6 +111,8 @@ namespace Atlas.Client
         public string Name { get; set; }
         /// <summary>Kept as text: positions can be "2", "2.5" or "I".</summary>
         public string Position { get; set; }
+        /// <summary>The Atlas id of the series record when Atlas names it (relations); null otherwise.</summary>
+        public string Id { get; set; }
     }
 
     /// <summary>One Atlas record (a game or a book or anything Atlas adds later). Fields a media type does not have are null or empty.</summary>
@@ -113,15 +127,34 @@ namespace Atlas.Client
         public string Developer { get; set; }
         public string Publisher { get; set; }
         public IReadOnlyList<Author> Authors { get; set; } = Array.Empty<Author>();
+        /// <summary>Topic words: <c>subjects</c>, else <c>genres</c>, else (books) <c>features</c>, where Atlas keeps Open Library subjects.</summary>
         public IReadOnlyList<string> Subjects { get; set; } = Array.Empty<string>();
         public IReadOnlyList<Edition> Editions { get; set; } = Array.Empty<Edition>();
+        /// <summary>From <c>series</c> or <c>facts.series</c>, else the first <c>relations.members_of</c> entry of type <c>series_member</c>.</summary>
         public SeriesInfo Series { get; set; }
+        /// <summary>The first ISBN-13 Atlas knows: <c>provider_ids.isbn</c>, else the first edition's <c>isbn_13</c>. Null for non-books.</summary>
+        public string Isbn
+        {
+            get
+            {
+                string v;
+                if (ProviderIds.TryGetValue("isbn", out v) && !string.IsNullOrWhiteSpace(v)) return v.Trim();
+                foreach (var e in Editions) if (!string.IsNullOrWhiteSpace(e.Isbn13)) return e.Isbn13.Trim();
+                return null;
+            }
+        }
         /// <summary>The first release at the precision Atlas can prove; null when Atlas has no date.</summary>
         public PartialDate? FirstRelease { get; set; }
         public IReadOnlyDictionary<string, string> ProviderIds { get; set; } = EmptyMap.Instance;
         public IReadOnlyList<string> Sources { get; set; } = Array.Empty<string>();
         /// <summary>Set when the requested id was merged away: store this record's <see cref="Id"/> instead.</summary>
         public string RedirectedFrom { get; set; }
+        /// <summary>True when this record is the answer for <paramref name="requestedId"/>: its own id, or the merged-away id it was asked by.</summary>
+        public bool Answers(string requestedId)
+        {
+            return !string.IsNullOrEmpty(requestedId)
+                   && (string.Equals(Id, requestedId, StringComparison.Ordinal) || string.Equals(RedirectedFrom, requestedId, StringComparison.Ordinal));
+        }
         /// <summary>For achievements: false means the type has none (books). Null when Atlas did not say.</summary>
         public bool? AchievementsApplicable { get; set; }
         public string UpdatedAt { get; set; }
@@ -284,6 +317,53 @@ namespace Atlas.Client
         public bool NotModified { get; set; }
         public AtlasRecord Record { get; set; }
         public string ETag { get; set; }
+    }
+
+    /// <summary>
+    /// ISBN text as hosts store it ("0-00-000011-6", "978 0 00 000011 8", "urn:isbn:...") to the bare ISBN-13 Atlas keys its
+    /// <c>isbn</c> crosswalk by (C15 §2.5). Null when the text is not a valid ISBN-10 or ISBN-13 (the check digit is verified).
+    /// </summary>
+    public static class IsbnText
+    {
+        public static string ToIsbn13(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            var t = text.Trim();
+            if (t.StartsWith("urn:isbn:", StringComparison.OrdinalIgnoreCase)) t = t.Substring(9);
+            else if (t.StartsWith("isbn", StringComparison.OrdinalIgnoreCase)) t = t.Substring(4).TrimStart(':', ' ', '-');
+            var chars = new List<char>();
+            foreach (var c in t)
+            {
+                if (c >= '0' && c <= '9') chars.Add(c);
+                else if (c == 'X' || c == 'x') chars.Add('X');
+                else if (c != '-' && c != ' ') return null;
+            }
+            var s = new string(chars.ToArray());
+            if (s.Length == 10)
+            {
+                var sum = 0;
+                for (var i = 0; i < 10; i++)
+                {
+                    int d;
+                    if (s[i] == 'X') { if (i != 9) return null; d = 10; }
+                    else d = s[i] - '0';
+                    sum += d * (10 - i);
+                }
+                if (sum % 11 != 0) return null;
+                var body = "978" + s.Substring(0, 9);
+                return body + Check13(body);
+            }
+            if (s.Length == 13 && s.IndexOf('X') < 0 && (s.StartsWith("978", StringComparison.Ordinal) || s.StartsWith("979", StringComparison.Ordinal)))
+                return Check13(s.Substring(0, 12)) == s[12] ? s : null;
+            return null;
+        }
+
+        private static char Check13(string twelve)
+        {
+            var sum = 0;
+            for (var i = 0; i < 12; i++) sum += (twelve[i] - '0') * (i % 2 == 0 ? 1 : 3);
+            return (char)('0' + (10 - sum % 10) % 10);
+        }
     }
 
     internal static class EmptyMap

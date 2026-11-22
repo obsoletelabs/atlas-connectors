@@ -4,12 +4,65 @@ using Xunit;
 namespace Atlas.Client.Tests;
 
 /// <summary>
-/// The device-code flow against a scripted server. The member names of the pair/poll bodies are PROVISIONAL (Atlas PR A24 has
-/// not shipped them); these tests pin what the client does with the shape it assumes, and the rules from CONTRACT-C15 10.1.
+/// The device-code flow against a scripted server, in the shape of contract/openapi-client-v1.json and the recorded
+/// contract/fixtures/pairing answers (client-api 1.0), and the rules from CONTRACT-C15 10.1.
 /// </summary>
 public class PairingTests
 {
-    private const string PairBody = "{\"code\":\"K7QM-4XTD\",\"verify_url\":\"https://atlas.test/pair?code=K7QM-4XTD\",\"poll_token\":\"poll-SECRET-abcdef\",\"expires_in\":600}";
+    private const string PairBody = "{\"code\":\"K7QM-4XTD\",\"verify_url\":\"https://atlas.test/pair\","
+        + "\"verify_url_complete\":\"https://atlas.test/pair?code=K7QM-4XTD\",\"qr_svg\":\"<svg/>\",\"poll_token\":\"poll-SECRET-abcdef\","
+        + "\"expires_in\":600,\"interval\":5}";
+
+    [Fact]
+    public async Task The_recorded_pairing_answers_are_understood()
+    {
+        using var rig = new Rig();
+        rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(Fixtures.Body("fixtures/pairing/pair-started.json")));
+        rig.Handler.On("POST", "/api/v2/client/pair/poll", _ => Reply.Json(Fixtures.Body("fixtures/pairing/poll-pending.json")));
+
+        var s = await rig.Client.StartPairingAsync("Jellyfin on nas");
+        Assert.Equal("ABCD-EFGH", s.UserCode);
+        Assert.Equal("https://atlas.example.org/pair", s.VerifyUrl);
+        Assert.Equal("https://atlas.example.org/pair?code=ABCD-EFGH", s.VerifyUrlComplete);
+        Assert.StartsWith("<svg", s.QrSvg);
+        Assert.Equal(600, s.ExpiresInSeconds);
+        Assert.Equal(5, s.IntervalSeconds);
+        Assert.Equal(PairingStatus.Pending, (await rig.Client.PollPairingAsync(s.PollToken)).Status);
+
+        // the client sends exactly the recorded requests
+        var json = new SystemTextJsonAdapter();
+        Assert.True(Adapters.Same(json.Parse(Fixtures.Request("fixtures/pairing/pair-started.json")), json.Parse(rig.Api.First().Body)), rig.Api.First().Body);
+        Assert.True(Adapters.Same(json.Parse(Fixtures.Request("fixtures/pairing/poll-pending.json")), json.Parse(rig.Api.Last().Body)), rig.Api.Last().Body);
+    }
+
+    [Fact]
+    public async Task Request_bodies_fit_the_openapi_schemas_which_refuse_unknown_members()
+    {
+        var spec = System.Text.Json.Nodes.JsonNode.Parse(Fixtures.Text("openapi-client-v1.json"));
+        var schemas = spec["components"]["schemas"];
+        using var rig = new Rig();
+        rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
+        rig.Handler.On("POST", "/api/v2/client/pair/poll", Poll(new { status = "pending" }));
+        rig.Handler.On("POST", "/api/v2/games/batch", _ => Reply.Json("{\"results\":[]}"));
+        await rig.Client.StartPairingAsync(new string('L', 200));
+        await rig.Client.PollPairingAsync("p");
+        await rig.Client.GetRecordsAsync(new[] { "atlas:a" });
+
+        foreach (var (path, schema) in new[] { ("/client/pair", "PairBody"), ("/client/pair/poll", "PollBody"), ("/games/batch", "BatchBody") })
+        {
+            var s = schemas[schema];
+            Assert.False((bool)s["additionalProperties"]);
+            var sent = System.Text.Json.Nodes.JsonNode.Parse(rig.Api.Single(r => r.Uri.AbsolutePath.EndsWith(path, StringComparison.Ordinal)).Body).AsObject();
+            foreach (var member in sent)
+            {
+                var prop = s["properties"][member.Key];
+                Assert.True(prop != null, schema + " has no member " + member.Key + " (Atlas would answer 422)");
+                if (prop["maxLength"] != null) Assert.InRange(member.Value.GetValue<string>().Length, 1, (int)prop["maxLength"]);
+            }
+            foreach (var required in s["required"].AsArray()) Assert.True(sent.ContainsKey((string)required), schema + " needs " + required);
+        }
+        Assert.Equal(AtlasClient.MaxPairLabel, (int)schemas["PairBody"]["properties"]["label"]["maxLength"]);
+    }
 
     private static FakeHandler.Responder Poll(object body, int status = 200, params (string, string)[] headers) =>
         _ => Reply.Status(status, body, headers);
@@ -20,23 +73,59 @@ public class PairingTests
         using var rig = new Rig("newtonsoft");
         rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
         rig.Handler.Sequence("POST", "/api/v2/client/pair/poll",
-            Poll(new { status = "pending" }),
-            Poll(new { status = "slow_down" }),
-            Poll(new { status = "approved", token = "new-personal-read-token" }));
+            Poll(new { status = "pending", interval = 5, expires_in = 590 }),
+            Poll(new { status = "slow_down", interval = 10 }),
+            Poll(new { status = "approved", token = "new-personal-read-token", token_id = "tid-1", name = "Jellyfin on nas", scopes = new[] { "read" } }));
 
         PairingSession shown = null;
         var token = await rig.Client.PairAsync("Jellyfin on nas", s => shown = s);
 
         Assert.Equal("new-personal-read-token", token);
         Assert.Equal("K7QM-4XTD", shown.UserCode);
-        Assert.Equal("https://atlas.test/pair?code=K7QM-4XTD", shown.VerifyUrl);
+        Assert.Equal("https://atlas.test/pair", shown.VerifyUrl);
+        Assert.Equal("https://atlas.test/pair?code=K7QM-4XTD", shown.VerifyUrlComplete);
+        Assert.Equal("<svg/>", shown.QrSvg);
         Assert.Equal(new[] { 5, 5, 10 }, rig.Delays.Select(d => (int)d.TotalSeconds));       // wait, poll, wait, poll(slow_down), wait+5, poll
 
         var start = new SystemTextJsonAdapter().Parse(rig.Api.First().Body);
         Assert.Equal("Jellyfin on nas", start["label"].AsString());
-        Assert.Equal("jellyfin", start["client"].AsString());
+        Assert.False(start.Has("client"));                                                  // PairBody refuses unknown members
         var poll = new SystemTextJsonAdapter().Parse(rig.Api.Skip(1).First().Body);
         Assert.Equal("poll-SECRET-abcdef", poll["poll_token"].AsString());
+    }
+
+    [Fact]
+    public async Task Slow_down_uses_the_interval_atlas_names_and_approval_carries_the_token_details()
+    {
+        using var rig = new Rig();
+        rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
+        rig.Handler.Sequence("POST", "/api/v2/client/pair/poll",
+            Poll(new { status = "slow_down", interval = 25 }),
+            Poll(new { status = "approved", token = "t", token_id = "tid-9", name = "x", scopes = new[] { "read" } }));
+        var slow = await rig.Client.PollPairingAsync("p");
+        Assert.Equal(PairingStatus.SlowDown, slow.Status);
+        Assert.Equal(25, slow.IntervalSeconds);
+        var ok = await rig.Client.PollPairingAsync("p");
+        Assert.Equal("tid-9", ok.TokenId);
+        Assert.Equal(new[] { "read" }, ok.Scopes);
+        Assert.DoesNotContain("\"t\"", ok.ToString());
+
+        using var flow = new Rig();
+        flow.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
+        flow.Handler.Sequence("POST", "/api/v2/client/pair/poll", Poll(new { status = "slow_down", interval = 25 }), Poll(new { status = "approved", token = "t" }));
+        await flow.Client.PairAsync("x", _ => { });
+        Assert.Equal(new[] { 5, 25 }, flow.Delays.Select(d => (int)d.TotalSeconds));
+    }
+
+    [Fact]
+    public async Task A_denial_for_the_token_limit_says_what_to_do()
+    {
+        using var rig = new Rig();
+        rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
+        rig.Handler.On("POST", "/api/v2/client/pair/poll", Poll(new { status = "denied", reason = "token_limit" }));
+        var e = await Assert.ThrowsAsync<AtlasPairingException>(() => rig.Client.PairAsync("x", _ => { }));
+        Assert.Equal("denied", e.Outcome);
+        Assert.Contains("Revoke", e.Message);
     }
 
     [Fact]
@@ -174,6 +263,44 @@ public class PairingTests
         rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
         await Assert.ThrowsAsync<ArgumentException>(() => rig.Client.StartPairingAsync(" "));
         await rig.Client.StartPairingAsync(new string('L', 200));
-        Assert.Equal(80, new SystemTextJsonAdapter().Parse(rig.Api.Single().Body)["label"].AsString().Length);
+        Assert.Equal(64, new SystemTextJsonAdapter().Parse(rig.Api.Single().Body)["label"].AsString().Length);
+    }
+
+    [Theory]
+    [InlineData("nas\u0007", "nas")]                                    // a bell from a machine name
+    [InlineData("Living\u00a0room\tNAS", "Living room NAS")]            // no-break space and tab: not printable for Atlas
+    [InlineData("  a\r\n\r\nb  ", "a b")]
+    [InlineData("zero\u200bwidth\u202e", "zerowidth")]                  // format characters (Cf)
+    [InlineData("priv\ue000ate", "private")]                           // private use
+    [InlineData("Jellyfin \U0001F3AC", "Jellyfin \U0001F3AC")]          // an emoji is printable: kept, pair intact
+    public void Pair_labels_are_made_printable_before_they_are_sent(string raw, string expected)
+    {
+        Assert.Equal(expected, AtlasClient.PairLabel(raw));
+    }
+
+    [Fact]
+    public void A_lone_surrogate_is_dropped_from_a_pair_label()
+    {
+        Assert.Equal("lone surrogate", AtlasClient.PairLabel("lone " + (char)0xD800 + " surrogate"));
+        Assert.Equal("x", AtlasClient.PairLabel("x" + (char)0xDC00));
+    }
+
+    [Fact]
+    public async Task A_label_with_control_characters_is_cleaned_and_one_with_nothing_printable_is_refused()
+    {
+        using var rig = new Rig();
+        rig.Handler.On("POST", "/api/v2/client/pair", _ => Reply.Json(PairBody));
+        await rig.Client.StartPairingAsync("Jellyfin on\u0000 nas\u001b[0m\n");
+        Assert.Equal("Jellyfin on nas[0m", new SystemTextJsonAdapter().Parse(rig.Api.Single().Body)["label"].AsString());
+        await Assert.ThrowsAsync<ArgumentException>(() => rig.Client.StartPairingAsync("\u0007\u200b"));
+        Assert.Single(rig.Api);                                         // nothing was sent for the refused label
+    }
+
+    [Fact]
+    public void A_long_label_never_splits_a_surrogate_pair_and_stays_within_64_code_points()
+    {
+        var label = AtlasClient.PairLabel(new string('a', 63) + "\U0001F3AC" + "tail");
+        Assert.Equal(63, label.Length);
+        Assert.False(char.IsHighSurrogate(label[label.Length - 1]));
     }
 }
