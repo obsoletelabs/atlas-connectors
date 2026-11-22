@@ -252,7 +252,7 @@ public class ReaderTests
         Assert.Equal("1.0", vectors["min_client_api"].AsString());
         foreach (var c in vectors["cases"].Items)
         {
-            var rec = AtlasReader.ReadRecord(j.Parse(Fixtures.Text("fixtures/" + c["record"].AsString())));
+            var rec = AtlasReader.ReadRecord(j.Parse(Fixtures.Text(c["record"].AsString().StartsWith("vectors/") ? c["record"].AsString() : "fixtures/" + c["record"].AsString())));
             var e = c["expect"];
             Assert.Equal(e["Name"].AsString(), rec.Title);
             if (e.Has("ReleaseDate"))

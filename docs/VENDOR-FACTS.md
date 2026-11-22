@@ -66,3 +66,25 @@ the time) and seeded through `tools/atlas_testkit.py`:
 What is **not** verified by running anything: the client has never been run on .NET Framework 4.6.2 or inside Playnite or
 Jellyfin. Its tests run on `net10.0` against a fake HTTP handler.
 
+
+## Facts checked for the Playnite package (PR 3), 2026-11-09
+
+| Fact | Result | Evidence |
+|---|---|---|
+| The SDK package restores and compiles here | **Confirmed.** `PlayniteSDK` **6.18.0** (latest on nuget.org at the time, from the flat-container index) restores for `net462` with the .NET SDK 10.0.402; the extension builds against it | `dotnet build packages/playnite/Atlas.Playnite`; `https://api.nuget.org/v3-flatcontainer/playnitesdk/index.json` |
+| Metadata plugin shape | **Confirmed by reflecting over the restored DLL and by the docs**: `MetadataPlugin` (abstract `Name`, `SupportedFields`, `GetMetadataProvider(MetadataRequestOptions)`), `Plugin.Id` abstract `Guid`, `OnDemandMetadataProvider` (`AvailableFields` plus `Get*` per field, `IDisposable`), `MetadataRequestOptions.IsBackgroundDownload` distinguishes bulk from manual | `https://api.playnite.link/docs/tutorials/extensions/metadataPlugins.html`, SDK 6.18.0 assembly |
+| Partial release dates | **Confirmed** (was unverified). `ReleaseDate` has constructors for year, year+month and year+month+day, with nullable `Month` and `Day` | `https://raw.githubusercontent.com/JosefNemec/Playnite/master/source/PlayniteSDK/Models/ReleaseDate.cs` |
+| Images as bytes | **Confirmed.** `MetadataFile(string name, byte[] content)` exists | SDK 6.18.0 assembly |
+| Playnite's Newtonsoft version | **Confirmed for master**: `Newtonsoft.Json` **10.0.3** is a package reference of the `Playnite` project. This settles the open point of PR 2 (the design note "Playnite's own Newtonsoft" was right, but the version is 10.0.3, not 13). The Playnite docs say a plugin must use the version Playnite already references, because two versions cannot be loaded. The extension therefore compiles against 10.0.3 and does not ship it | `https://raw.githubusercontent.com/JosefNemec/Playnite/master/source/Playnite/Playnite.csproj`; `https://api.playnite.link/docs/tutorials/extensions/plugins.html` |
+| Newtonsoft 10.0.3 has a known DoS advisory (fixed in 13.0.1) | **Accepted and mitigated**: the running copy is Playnite's own, and the adapter caps depth at 64 (`MaxDepth`). The advisory warning is suppressed in the two projects, with a comment | NuGet audit warning NU1903 on restore |
+| Toolbox `pack` | **Documented, not run.** `Toolbox.exe pack <extensionfolder> <targetfolder>` ships in a Playnite install, which is absent here. `packages/playnite/pack.py` writes the zip itself and re-checks it. A `.pext` being a zip with `extension.yaml` at the root is the assumption; it is **unverified** against a Toolbox-made file | `https://api.playnite.link/docs/tutorials/toolbox.html` |
+| `Toolbox.exe verify` | Validates **add-on database manifests** (`addon`, `installer`), not the package itself | same page |
+| Steam library plugin id and `GameId` | **Confirmed.** Plugin id `CB91DFC9-B977-43BF-8E70-55F46E410FAB`; `GameId` is the Steam GameID as a number string (it is a 64-bit id that also covers mods, so the connector sends only values that fit a 32-bit app id). GOG is `AEBE8B7C-6DC3-4A66-AF31-E7375C6B5E9E`, Epic `00000002-DBD1-46C6-B5D0-B1BA559D10E4` (read, not used: Atlas namespaces for them are unknown) | `PlayniteExtensions/source/Libraries/SteamLibrary/SteamLibrary.cs`, `Services/SteamLocalService.cs`, `GameExtension.cs` |
+| Atlas namespaces | Only `steamsync` and `igdbsync` appear in `resolve-contract-v1.json`. Namespace `playnite` (for unmapped libraries) is **not confirmed to be accepted by a live Atlas**; the Atlas docs mention "a Playnite identity" without a wire name | `contract/fixtures/resolve/resolve-contract-v1.json`; Atlas `docs/authority-modes.md` |
+| Atlas web page for a record | `/game/{cid}` exists in the Atlas programme clone (`atlas/web/routes.py`); the link written into Playnite uses it | read-only look at the local Atlas clone |
+| Settings and ISettings | **Confirmed.** `ISettings : IEditableObject` plus `VerifySettings`; view is a WPF `UserControl` with the settings object as data context; plugin data folder via `GetPluginUserDataPath()`; `Properties.HasSettings = true` | `https://api.playnite.link/docs/tutorials/extensions/pluginSettings.html`, SDK assembly |
+| Plugin loads only SDK assemblies | **Confirmed** by the plugin docs ("DO NOT reference non-SDK Playnite assemblies"); linking source is the suggested route (as `Atlas.Client` does) | `https://api.playnite.link/docs/tutorials/extensions/plugins.html` |
+| No headless Playnite | still **unverified**; none was looked for beyond the docs, which describe attaching a debugger to a running Playnite | plugins.html |
+
+What was **not** done: the extension was never loaded by a running Playnite; no Atlas (real or local) was contacted by the
+extension; `Toolbox.exe pack` was never run; Playnite 11 was not looked at.

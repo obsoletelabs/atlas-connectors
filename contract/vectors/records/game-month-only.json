@@ -1,0 +1,14 @@
+{
+  "first_release": {
+    "date": "2003-09",
+    "precision": "month"
+  },
+  "id": "atlas:00000000000000000000000003",
+  "media_type": "game",
+  "provider_ids": {
+    "synthetic": "v3"
+  },
+  "redirected_from": null,
+  "title": "Synthetic Month Only",
+  "version": 1
+}

@@ -27,8 +27,29 @@ jobs:
           python -m pip install pytest
           python -m pytest tests -q
           python tools/contract_pin.py check
-      - name: Pack the .pext, attach it with checksums, regenerate catalogues/ and open the add-on database PR
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Tag matches the package version
         shell: bash
         run: |
-          echo "::error::The Playnite package does not exist yet (PR X1). Refusing to publish an empty release."
-          exit 1
+          version="${GITHUB_REF_NAME#playnite-v}"
+          grep -qx "Version: $version" packages/playnite/extension.yaml
+          grep -q "<Version>$version</Version>" packages/playnite/Atlas.Playnite/Atlas.Playnite.csproj
+          grep -q "^## $version" packages/playnite/CHANGELOG.md
+      - name: Build, test, pack and check the .pext
+        shell: bash
+        run: |
+          dotnet build packages/playnite/Atlas.Playnite -c Release
+          dotnet test packages/playnite/Atlas.Playnite.Tests -c Release
+          python packages/playnite/pack.py --no-build
+          python packages/playnite/pack.py --verify "packages/playnite/dist/Atlas_Metadata-${GITHUB_REF_NAME#playnite-v}.pext"
+      - name: Attach the .pext and its checksum to the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "Atlas for Playnite ${GITHUB_REF_NAME#playnite-v}" \
+            --notes-file packages/playnite/CHANGELOG.md packages/playnite/dist/*.pext packages/playnite/dist/*.sha256
+      # Not automated on purpose: the Playnite add-on database accepts submissions only after Playnite 11 (docs/VENDOR-FACTS.md),
+      # and catalogue generation (tools/gen_catalogues.py) does not exist yet. Do the database PR by hand from the release asset.
