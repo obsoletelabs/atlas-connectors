@@ -1,0 +1,41 @@
+{
+  "a_field_added_in_a_later_minor": {
+    "nested": [
+      1,
+      2,
+      3
+    ]
+  },
+  "custom": {},
+  "developer": "Valve",
+  "first_release": {
+    "date": "2011-04-19",
+    "precision": "day"
+  },
+  "id": "atlas:00000000000000000000000000",
+  "media_type": "game",
+  "platform_family": "holographic",
+  "provider_ids": {
+    "synthetic": "fc-1"
+  },
+  "redirected_from": null,
+  "relations": {
+    "children": [],
+    "counts": {
+      "children": 0,
+      "members": 0,
+      "members_of": 0,
+      "parents": 0
+    },
+    "members": [],
+    "members_of": [],
+    "parents": [],
+    "truncated": false
+  },
+  "release_date": "2011-04-19",
+  "release_year": 2011,
+  "title": "Forward Compatibility Probe",
+  "unmerged": [],
+  "updated_at": "2026-11-09T14:31:33.123087+00:00",
+  "version": 2
+}

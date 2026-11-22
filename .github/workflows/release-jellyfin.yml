@@ -1,0 +1,31 @@
+name: release-jellyfin
+
+# Fires on tags jellyfin-v<semver> and builds ONLY the Jellyfin package (CONTRACT-C15 sections 8.2 and 12).
+on:
+  push:
+    tags: ["jellyfin-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Validate the tag
+        run: |
+          python tools/ci_changes.py --tag "$GITHUB_REF_NAME" | tee target.txt
+          grep -qx "package=jellyfin" target.txt
+      - name: Offline tests and contract pins
+        run: |
+          python -m pip install pytest
+          python -m pytest tests -q
+          python tools/contract_pin.py check
+      - name: Build per supported ABI, attach zips and checksums, regenerate the repository manifest for Pages
+        run: |
+          echo "::error::The Jellyfin package does not exist yet (PR X2). Refusing to publish an empty release."
+          exit 1

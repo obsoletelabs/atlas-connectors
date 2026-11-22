@@ -1,0 +1,52 @@
+{
+  "_status": "HAND-WRITTEN DRAFT of the book view in CONTRACT-C15 sections 2-6. Replace with an Atlas-generated recording (Atlas PRs A21-A24). Synthetic, CC0.",
+  "achievements": {
+    "applicable": false
+  },
+  "authors": [
+    {
+      "name": "Ada Example"
+    },
+    {
+      "name": "B. Placeholder"
+    }
+  ],
+  "editions": [
+    {
+      "name": "Hardcover",
+      "provider_ids": {
+        "isbn": "9780000000002"
+      }
+    },
+    {
+      "name": "Paperback",
+      "provider_ids": {
+        "isbn": "9780000000019"
+      }
+    }
+  ],
+  "first_release": {
+    "date": "1999",
+    "precision": "year"
+  },
+  "id": "atlas:00000000000000000000000001",
+  "media_type": "book",
+  "provider_ids": {
+    "isbn": "9780000000002",
+    "openlibrary": "OL0000000W"
+  },
+  "redirected_from": null,
+  "release_date": null,
+  "release_year": 1999,
+  "series": {
+    "name": "The Fictional Coast",
+    "position": "2"
+  },
+  "subjects": [
+    "Fiction",
+    "Lighthouses"
+  ],
+  "title": "The Synthetic Lighthouse",
+  "unknown_future_member": true,
+  "version": 1
+}

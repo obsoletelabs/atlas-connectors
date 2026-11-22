@@ -1,0 +1,14 @@
+name: Feature or host request
+description: Suggest a feature, or another host tool to support
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What do you want Atlas data to do in your tool?
+    validations: {required: true}
+  - type: textarea
+    id: contract
+    attributes:
+      label: Does it need something outside client-api v1?
+      description: Connectors may only use the documented client contract.

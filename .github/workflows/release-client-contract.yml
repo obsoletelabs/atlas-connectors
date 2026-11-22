@@ -1,0 +1,39 @@
+name: release-client-contract
+
+# Fires on tags client-contract-v<major>.<minor>. Publishes contract/ as a release asset with its checksum. It refuses
+# while any scaffold stand-in remains (placeholder OpenAPI file, scaffold fixture version, hand-written book drafts).
+on:
+  push:
+    tags: ["client-contract-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Validate the tag
+        run: |
+          python tools/ci_changes.py --tag "$GITHUB_REF_NAME" | tee target.txt
+          grep -qx "kind=contract" target.txt
+      - name: Tests, pins, and no placeholders
+        run: |
+          python -m pip install pytest
+          python -m pytest tests -q
+          python tools/contract_pin.py release-check
+      - name: Package and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#client-contract-v}"
+          asset="client-contract-${version}.tar.gz"
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='UTC 2000-01-01' -czf "$asset" contract
+          sha256sum "$asset" > "$asset.sha256"
+          gh release create "$GITHUB_REF_NAME" "$asset" "$asset.sha256" \
+            --title "client-api contract ${version}" \
+            --notes "The Atlas client contract (client-api v1): CLIENT-CONTRACT.md, pinned OpenAPI, fixtures and vectors. Verify with the attached sha256."
